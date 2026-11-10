@@ -3,3 +3,10 @@ pandas
 requests
 matplotlib
 ipython
+xxray
+cfgrib
+netCDF4
+matplotlib
+pydap
+siphon
+xgboost
