@@ -1,14 +1,17 @@
 import os
-
-# Read from environment variables passed by GitHub Actions, with fallback defaults
-station = os.getenv("STATION", "TJSJ")
-SOUNDING_DATE = os.getenv("SOUNDING_DATE", "2026-03-24")
-SOUNDING_HOUR = os.getenv("SOUNDING_HOUR", "12")
-
 import datetime as _dt
+
+# --- Runtime parameters (with fallbacks for GitHub Actions / Apps Script) ---
+STATION_ID = os.getenv("STATION", "78526")
+USE_LATEST_SOUNDING = os.getenv("USE_LATEST", "False").lower() in ("true", "1")
+SOUNDING_DATE = os.getenv("SOUNDING_DATE", "2026-11-10")
+SOUNDING_HOUR = os.getenv("SOUNDING_HOUR", "12Z")
+
+# Parse date and hour
 _d = _dt.date.fromisoformat(SOUNDING_DATE)
 YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, int(SOUNDING_HOUR[:2])
-# Optional: path to a saved UWyo TEXT:LIST file (upload it to Colab). Leave blank to download.
+
+# Path to optional local sounding file (keep empty when downloading from UWyo)
 SOUNDING_TEXT_FILE = ''
 
 #@markdown ---
