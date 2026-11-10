@@ -30,8 +30,10 @@ jobs:
           SOUNDING_HOUR: ${{ github.event.client_payload.hour || '12Z' }}
         run: python run_risk_assessment.py
 
-      - name: Save Output Graphic as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: risk-latest-graphic
-          path: web_images/risk_latest.png
+      - name: Commit and Push Image
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add web_images/risk_latest.png
+          git commit -m "Auto-update latest sounding risk graphic [skip ci]" || exit 0
+          git push
