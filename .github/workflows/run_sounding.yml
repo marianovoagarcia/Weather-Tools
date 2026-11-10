@@ -5,6 +5,9 @@ on:
     types: [run_sounding_job]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run-assessment:
     runs-on: ubuntu-latest
