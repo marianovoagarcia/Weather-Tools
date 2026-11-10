@@ -1894,7 +1894,9 @@ os.makedirs(OUT_DIR, exist_ok=True)
 IMAGE = make_overview(R, INV, GFS_RUNS, f"{OUT_DIR}/risk_latest.png", GFS_NOTE)
 print('Saved', IMAGE)
 from IPython.display import Image as _Img
-display(_Img(IMAGE, width=1000))
+os.makedirs(OUT_DIR, exist_ok=True)
+IMAGE = make_overview(R, INV, GFS_RUNS, f"{OUT_DIR}/risk_latest.png", GFS_NOTE)
+print(f"Successfully generated graphic: {IMAGE}")
 # if DOWNLOAD_IMAGE:
 #     try:
 #         from google.colab import files; files.download(IMAGE)
