@@ -3,7 +3,7 @@ pandas
 requests
 matplotlib
 ipython
-xxray
+xarray
 cfgrib
 netCDF4
 matplotlib
