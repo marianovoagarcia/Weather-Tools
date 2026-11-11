@@ -3,14 +3,29 @@ import datetime as _dt
 
 # --- Runtime parameters (with fallbacks for GitHub Actions / Apps Script) ---
 STATION_ID = os.getenv("STATION", "78526")
-USE_LATEST_SOUNDING = os.getenv("USE_LATEST", "False").lower() in ("true", "1")
-SOUNDING_DATE = os.getenv("SOUNDING_DATE", "2026-11-10")
-SOUNDING_HOUR = os.getenv("SOUNDING_HOUR", "12Z")
+USE_LATEST_SOUNDING = os.getenv("USE_LATEST", "True").lower() in ("true", "1")
 
-# Parse date and hour
-_d = _dt.date.fromisoformat(SOUNDING_DATE)
-YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, int(SOUNDING_HOUR[:2])
+# If USE_LATEST is true, derive the target date and cycle dynamically from UTC
+if USE_LATEST_SOUNDING:
+    now_utc = _dt.datetime.now(_dt.timezone.utc)
+    # Soundings post at 00Z and 12Z. At 13Z (9 AM AST), the 12Z sounding is current.
+    # At 01Z (9 PM AST), the 00Z sounding of the next UTC day is current.
+    if now_utc.hour >= 12:
+        _d = now_utc.date()
+        target_hour = 12
+    else:
+        _d = now_utc.date()
+        target_hour = 0
 
+    YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, target_hour
+    SOUNDING_DATE = _d.isoformat()
+    SOUNDING_HOUR = f"{target_hour:02d}Z"
+else:
+    SOUNDING_DATE = os.getenv("SOUNDING_DATE", _dt.date.today().isoformat())
+    SOUNDING_HOUR = os.getenv("SOUNDING_HOUR", "12Z")
+    _d = _dt.date.fromisoformat(SOUNDING_DATE)
+    YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, int(SOUNDING_HOUR[:2])
+    
 # Path to optional local sounding file (keep empty when downloading from UWyo)
 SOUNDING_TEXT_FILE = ''
 
