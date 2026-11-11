@@ -10,3 +10,4 @@ matplotlib
 pydap
 siphon
 xgboost
+metpy
