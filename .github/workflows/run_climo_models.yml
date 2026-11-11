@@ -36,7 +36,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Adjust the path to match where your script saves its output image
-          git add web_images/climo_latest.png
-          git commit -m "Auto-update climo vs models graphic [skip ci]" || exit 0
+          git add web_images/climo_vs_models.png
+          git commit -m "Auto-update climo graphic [skip ci]" || exit 0
           git push
