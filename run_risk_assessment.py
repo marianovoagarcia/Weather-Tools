@@ -36,7 +36,7 @@ SJU_LAT, SJU_LON = 18.43, -66.00     # TJSJ launch site
 
 #@markdown ---
 #@markdown **High cloud (HCDC)**: dense high cloud blocks daytime heating and limits showers and thunderstorms.
-USE_HIGH_CLOUD = True  #@param {type:"boolean"}
+USE_HIGH_CLOUD = False  #@param {type:"boolean"}
 
 TODAY_STYLE = 'legacy'  # ['enhanced', 'legacy']
 GFS_MAX_AGE_DAYS = 92   # older soundings run on the sounding alone (Open-Meteo keeps ~3 months of past GFS runs)
@@ -625,49 +625,52 @@ def latest_synoptic(now=None):
     return t.replace(hour=0 if t.hour < 12 else 12, minute=0, second=0, microsecond=0)
 
 def fetch_uwyo(station_id, when):
+    import urllib.parse
     import requests
     from bs4 import BeautifulSoup
 
-    # Format datetime as expected by Wyoming BUFR interface: YYYY-MM-DD HH:00:00
-    dt_str = f"{when.year}-{when.month:02d}-{when.day:02d}+{when.hour:02d}:00:00"
-    
-    # Modern Wyoming BUFR endpoint (matches the interactive website)
-    bufr_url = (
-        f"https://weather.uwyo.edu/cgi-bin/bufrraob.py?"
-        f"src=bufr&datetime={dt_str}&id={station_id}&type=TEXT:LIST"
+    # Format datetime as: YYYY-MM-DD HH:00:00
+    dt_str = f"{when.year}-{when.month:02d}-{when.day:02d} {when.hour:02d}:00:00"
+    encoded_dt = urllib.parse.quote(dt_str)
+
+    # Wyoming modern WSGI endpoint
+    url = (
+        f"https://weather.uwyo.edu/wsgi/sounding?"
+        f"datetime={encoded_dt}&id={station_id}&src=BUFR&type=TEXT:LIST"
     )
-    
-    # Fallback to direct weather server
-    fallback_bufr_url = (
-        f"https://weather.arcc.uwyo.edu/cgi-bin/bufrraob.py?"
-        f"src=bufr&datetime={dt_str}&id={station_id}&type=TEXT:LIST"
+
+    fallback_url = (
+        f"https://weather.arcc.uwyo.edu/wsgi/sounding?"
+        f"datetime={encoded_dt}&id={station_id}&src=BUFR&type=TEXT:LIST"
     )
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://weather.uwyo.edu/upperair/sounding.html"
+        "Referer": "https://weather.uwyo.edu/upperair/sounding.html",
     }
 
     errors = []
-    for target_url in [bufr_url, fallback_bufr_url]:
+    for target_url in [url, fallback_url]:
         try:
             resp = requests.get(target_url, headers=headers, timeout=25)
-            if resp.status_code == 200 and ("<PRE>" in resp.text.upper() or "PRES" in resp.text):
-                soup = BeautifulSoup(resp.text, "html.parser")
-                pre = soup.find("pre")
-                if pre and pre.text.strip():
-                    return parse_uwyo_text(pre.text), target_url
-                elif "PRES" in resp.text:
-                    # If raw text returned without pre tags
-                    return parse_uwyo_text(resp.text), target_url
-            errors.append(f"{target_url}: HTTP {resp.status_code}")
+            if resp.status_code == 200:
+                text = resp.text
+                if "<PRE>" in text.upper():
+                    soup = BeautifulSoup(text, "html.parser")
+                    pre = soup.find("pre")
+                    if pre and pre.text.strip():
+                        return parse_uwyo_text(pre.text), target_url
+                elif "PRES" in text:
+                    return parse_uwyo_text(text), target_url
+                errors.append(f"{target_url}: 200 OK but no tabular RAOB data found in response")
+            else:
+                errors.append(f"{target_url}: HTTP {resp.status_code}")
         except Exception as e:
             errors.append(f"{target_url}: {str(e)}")
 
     raise RuntimeError("Could not get the sounding from Uwyo:\n " + "\n ".join(errors))
-
+    
 def load_raob():
     when = latest_synoptic() if USE_LATEST_SOUNDING else dt.datetime(YEAR, MONTH, DAY, HOUR)
     if SOUNDING_TEXT_FILE:
