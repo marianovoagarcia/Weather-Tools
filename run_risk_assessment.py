@@ -627,52 +627,42 @@ def latest_synoptic(now=None):
 def fetch_uwyo(station_id, when):
     import requests
     from bs4 import BeautifulSoup
+
+    # Format datetime as expected by Wyoming BUFR interface: YYYY-MM-DD HH:00:00
+    dt_str = f"{when.year}-{when.month:02d}-{when.day:02d}+{when.hour:02d}:00:00"
     
-    # 78526 (TJSJ) and Caribbean stations must use region='carib'
-    region = "carib" if str(station_id).startswith("78") else "naconf"
-    
-    # Format Wyoming query parameters
-    day_str = f"{when.day:02d}{when.hour:02d}"
-    
-    url = (
-        f"https://weather.uwyo.edu/cgi-bin/sounding?"
-        f"region={region}"
-        f"&TYPE=TEXT%3ALIST"
-        f"&YEAR={when.year}"
-        f"&MONTH={when.month:02d}"
-        f"&FROM={day_str}"
-        f"&TO={day_str}"
-        f"&STNM={station_id}"
+    # Modern Wyoming BUFR endpoint (matches the interactive website)
+    bufr_url = (
+        f"https://weather.uwyo.edu/cgi-bin/bufrraob.py?"
+        f"src=bufr&datetime={dt_str}&id={station_id}&type=TEXT:LIST"
     )
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    
-    # Also add the fallback URL with region=carib
-    fallback_url = (
-        f"https://weather.arcc.uwyo.edu/cgi-bin/sounding?"
-        f"region={region}"
-        f"&TYPE=TEXT%3ALIST"
-        f"&YEAR={when.year}"
-        f"&MONTH={when.month:02d}"
-        f"&FROM={day_str}"
-        f"&TO={day_str}"
-        f"&STNM={station_id}"
+    # Fallback to direct weather server
+    fallback_bufr_url = (
+        f"https://weather.arcc.uwyo.edu/cgi-bin/bufrraob.py?"
+        f"src=bufr&datetime={dt_str}&id={station_id}&type=TEXT:LIST"
     )
 
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://weather.uwyo.edu/upperair/sounding.html"
+    }
+
     errors = []
-    for target_url in [url, fallback_url]:
+    for target_url in [bufr_url, fallback_bufr_url]:
         try:
             resp = requests.get(target_url, headers=headers, timeout=25)
-            if resp.status_code == 200 and "<PRE>" in resp.text.upper():
-                # Extract text between <PRE> tags
+            if resp.status_code == 200 and ("<PRE>" in resp.text.upper() or "PRES" in resp.text):
                 soup = BeautifulSoup(resp.text, "html.parser")
                 pre = soup.find("pre")
                 if pre and pre.text.strip():
                     return parse_uwyo_text(pre.text), target_url
-            else:
-                errors.append(f"{target_url}: HTTP {resp.status_code}")
+                elif "PRES" in resp.text:
+                    # If raw text returned without pre tags
+                    return parse_uwyo_text(resp.text), target_url
+            errors.append(f"{target_url}: HTTP {resp.status_code}")
         except Exception as e:
             errors.append(f"{target_url}: {str(e)}")
 
