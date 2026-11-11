@@ -624,31 +624,59 @@ def latest_synoptic(now=None):
     t = now - dt.timedelta(hours=3)          # allow ~3 h for the data to reach UWyo
     return t.replace(hour=0 if t.hour < 12 else 12, minute=0, second=0, microsecond=0)
 
-def fetch_uwyo(station, when, tries=2):
-    urls = [
-        (f"https://weather.uwyo.edu/wsgi/sounding?datetime={when:%Y-%m-%d}%20{when:%H}:00:00"
-         f"&id={station}&src=BUFR&type=TEXT:LIST"),
-        (f"http://weather.uwyo.edu/cgi-bin/sounding?region=naconf&TYPE=TEXT%3ALIST&YEAR={when:%Y}"
-         f"&MONTH={when:%m}&FROM={when:%d%H}&TO={when:%d%H}&STNM={station}"),
-        (f"https://weather.uwyo.edu/wsgi/sounding?datetime={when:%Y-%m-%d}%20{when:%H}:00:00"
-         f"&id={station}&src=UNKNOWN&type=TEXT:LIST"),
-        (f"http://weather.uwyo.edu/cgi-bin/bufrraob.py?src=bufr&datetime={when:%Y-%m-%d}+{when:%H}:00:00"
-         f"&id={station}&type=TEXT:LIST"),
-    ]
+def fetch_uwyo(station_id, when):
+    import requests
+    from bs4 import BeautifulSoup
+    
+    # 78526 (TJSJ) and Caribbean stations must use region='carib'
+    region = "carib" if str(station_id).startswith("78") else "naconf"
+    
+    # Format Wyoming query parameters
+    day_str = f"{when.day:02d}{when.hour:02d}"
+    
+    url = (
+        f"https://weather.uwyo.edu/cgi-bin/sounding?"
+        f"region={region}"
+        f"&TYPE=TEXT%3ALIST"
+        f"&YEAR={when.year}"
+        f"&MONTH={when.month:02d}"
+        f"&FROM={day_str}"
+        f"&TO={day_str}"
+        f"&STNM={station_id}"
+    )
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    # Also add the fallback URL with region=carib
+    fallback_url = (
+        f"https://weather.arcc.uwyo.edu/cgi-bin/sounding?"
+        f"region={region}"
+        f"&TYPE=TEXT%3ALIST"
+        f"&YEAR={when.year}"
+        f"&MONTH={when.month:02d}"
+        f"&FROM={day_str}"
+        f"&TO={day_str}"
+        f"&STNM={station_id}"
+    )
+
     errors = []
-    for url in urls:
-        for k in range(tries):
-            try:
-                r = requests.get(url, timeout=40, headers={'User-Agent': 'TJSJ-risk-notebook (Colab)'})
-                if r.status_code == 503:            # UWyo throttles; back off and retry
-                    time.sleep(4 * (k + 1)); continue
-                r.raise_for_status()
-                df, ix = parse_uwyo_text(r.text)
-                return df, ix, url
-            except Exception as e:
-                errors.append(f'{url.split("?")[0]}: {e}')
-                break
-    raise RuntimeError('Could not get the sounding from UWyo:\n  ' + '\n  '.join(errors))
+    for target_url in [url, fallback_url]:
+        try:
+            resp = requests.get(target_url, headers=headers, timeout=25)
+            if resp.status_code == 200 and "<PRE>" in resp.text.upper():
+                # Extract text between <PRE> tags
+                soup = BeautifulSoup(resp.text, "html.parser")
+                pre = soup.find("pre")
+                if pre and pre.text.strip():
+                    return parse_uwyo_text(pre.text), target_url
+            else:
+                errors.append(f"{target_url}: HTTP {resp.status_code}")
+        except Exception as e:
+            errors.append(f"{target_url}: {str(e)}")
+
+    raise RuntimeError("Could not get the sounding from Uwyo:\n " + "\n ".join(errors))
 
 def load_raob():
     when = latest_synoptic() if USE_LATEST_SOUNDING else dt.datetime(YEAR, MONTH, DAY, HOUR)
