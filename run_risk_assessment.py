@@ -629,11 +629,11 @@ def fetch_uwyo(station_id, when):
     import requests
     from bs4 import BeautifulSoup
 
-    # Format datetime as: YYYY-MM-DD HH:00:00
+    # Format datetime as expected by Wyoming: YYYY-MM-DD HH:00:00
     dt_str = f"{when.year}-{when.month:02d}-{when.day:02d} {when.hour:02d}:00:00"
     encoded_dt = urllib.parse.quote(dt_str)
 
-    # Wyoming modern WSGI endpoint
+    # Modern Wyoming WSGI endpoint
     url = (
         f"https://weather.uwyo.edu/wsgi/sounding?"
         f"datetime={encoded_dt}&id={station_id}&src=BUFR&type=TEXT:LIST"
@@ -656,14 +656,21 @@ def fetch_uwyo(station_id, when):
             resp = requests.get(target_url, headers=headers, timeout=25)
             if resp.status_code == 200:
                 text = resp.text
+                raw_table = None
                 if "<PRE>" in text.upper():
                     soup = BeautifulSoup(text, "html.parser")
                     pre = soup.find("pre")
                     if pre and pre.text.strip():
-                        return parse_uwyo_text(pre.text), target_url
-                elif "PRES" in text:
-                    return parse_uwyo_text(text), target_url
-                errors.append(f"{target_url}: 200 OK but no tabular RAOB data found in response")
+                        raw_table = pre.text
+                elif "PRES" in text and "HGHT" in text:
+                    raw_table = text
+
+                if raw_table:
+                    df, ix = parse_uwyo_text(raw_table)
+                    # Return 3 distinct values: df, ix, and the source URL string
+                    return df, ix, target_url
+
+                errors.append(f"{target_url}: 200 OK but no tabular data inside <pre>")
             else:
                 errors.append(f"{target_url}: HTTP {resp.status_code}")
         except Exception as e:
@@ -672,12 +679,24 @@ def fetch_uwyo(station_id, when):
     raise RuntimeError("Could not get the sounding from Uwyo:\n " + "\n ".join(errors))
     
 def load_raob():
-    when = latest_synoptic() if USE_LATEST_SOUNDING else dt.datetime(YEAR, MONTH, DAY, HOUR)
+    # If USE_LATEST_SOUNDING was already computed at the top of the file, use YEAR, MONTH, DAY, HOUR directly
+    when = dt.datetime(YEAR, MONTH, DAY, HOUR)
     if SOUNDING_TEXT_FILE:
         df, ix = parse_uwyo_text(open(SOUNDING_TEXT_FILE, encoding='utf-8', errors='ignore').read())
         src = SOUNDING_TEXT_FILE
     else:
-        df, ix = fetch_uwyo(STATION_ID, when)
+        try:
+            df, ix, src = fetch_uwyo(STATION_ID, when)
+        except RuntimeError as primary_err:
+            # Fallback: if the current cycle (e.g., 12Z) hasn't posted yet on Wyoming, retry previous 12h cycle
+            if USE_LATEST_SOUNDING:
+                prev_when = when - dt.timedelta(hours=12)
+                print(f"⚠️ Primary sounding {when:%Y-%m-%d %HZ} not yet available. Retrying previous cycle: {prev_when:%Y-%m-%d %HZ}...")
+                df, ix, src = fetch_uwyo(STATION_ID, prev_when)
+                when = prev_when
+            else:
+                raise primary_err
+
     snd = Sounding(df, ix, meta=dict(station=STATION_ID, valid=when, url=src), source='RAOB')
     snd.complete_indices()
     return snd
