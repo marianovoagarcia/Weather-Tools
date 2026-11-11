@@ -677,7 +677,7 @@ def load_raob():
         df, ix = parse_uwyo_text(open(SOUNDING_TEXT_FILE, encoding='utf-8', errors='ignore').read())
         src = SOUNDING_TEXT_FILE
     else:
-        df, ix, src = fetch_uwyo(STATION_ID, when)
+        df, ix = fetch_uwyo(STATION_ID, when)
     snd = Sounding(df, ix, meta=dict(station=STATION_ID, valid=when, url=src), source='RAOB')
     snd.complete_indices()
     return snd
