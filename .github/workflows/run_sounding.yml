@@ -26,12 +26,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Script
+      - name: Run Targeted Script(s)
         env:
           STATION: ${{ github.event.client_payload.station || '78526' }}
-          SOUNDING_DATE: ${{ github.event.client_payload.date || '2026-11-10' }}
-          SOUNDING_HOUR: ${{ github.event.client_payload.hour || '12Z' }}
-        run: python run_risk_assessment.py
+          USE_LATEST: ${{ github.event.client_payload.use_latest || 'true' }}
+          SOUNDING_DATE: ${{ github.event.client_payload.date }}
+          SOUNDING_HOUR: ${{ github.event.client_payload.hour }}
+          JOB_TARGET: ${{ github.event.client_payload.script_name || 'all' }}
+        run: |
+          python run_risk_assessment.py
 
       - name: Commit and Push Image
         run: |
