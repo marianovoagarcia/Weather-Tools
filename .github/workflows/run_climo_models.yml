@@ -39,6 +39,3 @@ jobs:
           git add web_images/climo_vs_models.png
           git diff --staged --quiet || git commit -m "Auto-update climo graphic [skip ci]"
           git push
-
-      - name: Notify Google Apps Script to Archive
-        run: curl -s -L -X POST "${{ secrets.GAS_WEBHOOK_URL }}"
