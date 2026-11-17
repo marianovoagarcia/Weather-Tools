@@ -8,6 +8,7 @@ USE_LATEST_SOUNDING = os.getenv("USE_LATEST", "True").lower() in ("true", "1")
 # If USE_LATEST is true, derive the target date and cycle dynamically from UTC
 if USE_LATEST_SOUNDING:
     now_utc = _dt.datetime.now(_dt.timezone.utc)
+     _d = now_utc.date()
     # At 9:00 AM AST (13:00 UTC) -> target 12Z today
     # At 9:00 PM AST (01:00 UTC) -> target 00Z today
     if now_utc.hour >= 13:
@@ -20,7 +21,7 @@ if USE_LATEST_SOUNDING:
 
     target_hour = target_dt.hour
 
-    YEAR, MONTH, DAY, HOUR = _dt.year, _dt.month, _dt.day, target_hour
+    YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, target_hour
     SOUNDING_DATE = _dt.isoformat()
     SOUNDING_HOUR = f"{target_hour:02d}Z"
 else:
