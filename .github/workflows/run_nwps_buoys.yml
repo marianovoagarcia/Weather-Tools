@@ -1,0 +1,39 @@
+name: Run NWPS Wave Buoys
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-nwps:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeccodes-dev
+          python -m pip install --upgrade pip
+          pip install numpy matplotlib requests eccodes
+
+      - name: Run NWPS Wave Buoys Script
+        run: python nwps_buoys.py
+
+      - name: Commit and Push Wave Graphics
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add web_images/nwps_virtual_buoys.png web_images/nwps_point_forecast.png
+          git diff --staged --quiet || git commit -m "Auto-update NWPS wave graphics [skip ci]"
+          git push
