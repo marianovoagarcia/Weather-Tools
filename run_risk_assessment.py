@@ -20,8 +20,8 @@ if USE_LATEST_SOUNDING:
 
     target_hour = target_dt.hour
 
-    YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, target_hour
-    SOUNDING_DATE = _d.isoformat()
+    YEAR, MONTH, DAY, HOUR = _dt.year, _dt.month, _dt.day, target_hour
+    SOUNDING_DATE = _dt.isoformat()
     SOUNDING_HOUR = f"{target_hour:02d}Z"
 else:
     SOUNDING_DATE = os.getenv("SOUNDING_DATE", _dt.date.today().isoformat())
