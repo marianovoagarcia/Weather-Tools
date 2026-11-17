@@ -8,14 +8,17 @@ USE_LATEST_SOUNDING = os.getenv("USE_LATEST", "True").lower() in ("true", "1")
 # If USE_LATEST is true, derive the target date and cycle dynamically from UTC
 if USE_LATEST_SOUNDING:
     now_utc = _dt.datetime.now(_dt.timezone.utc)
-    # Soundings post at 00Z and 12Z. At 13Z (9 AM AST), the 12Z sounding is current.
-    # At 01Z (9 PM AST), the 00Z sounding of the next UTC day is current.
-    if now_utc.hour >= 12:
-        _d = now_utc.date()
-        target_hour = 12
+    # At 9:00 AM AST (13:00 UTC) -> target 12Z today
+    # At 9:00 PM AST (01:00 UTC) -> target 00Z today
+    if now_utc.hour >= 13:
+        target_dt = now_utc.replace(hour=12, minute=0, second=0, microsecond=0)
+    elif now_utc.hour >= 1:
+        target_dt = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
-        _d = now_utc.date()
-        target_hour = 0
+        # Between 00:00 and 00:59 UTC (8:00-8:59 PM AST), 00Z hasn't launched yet -> use 12Z yesterday
+        target_dt = (now_utc - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+
+    target_hour = target_dt.hour
 
     YEAR, MONTH, DAY, HOUR = _d.year, _d.month, _d.day, target_hour
     SOUNDING_DATE = _d.isoformat()
