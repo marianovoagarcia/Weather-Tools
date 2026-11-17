@@ -36,7 +36,7 @@ SJU_LAT, SJU_LON = 18.43, -66.00     # TJSJ launch site
 
 #@markdown ---
 #@markdown **High cloud (HCDC)**: dense high cloud blocks daytime heating and limits showers and thunderstorms.
-USE_HIGH_CLOUD = True  #@param {type:"boolean"}
+USE_HIGH_CLOUD = False  #@param {type:"boolean"}
 
 TODAY_STYLE = 'legacy'  # ['enhanced', 'legacy']
 GFS_MAX_AGE_DAYS = 92   # older soundings run on the sounding alone (Open-Meteo keeps ~3 months of past GFS runs)
