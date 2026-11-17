@@ -36,7 +36,7 @@ SJU_LAT, SJU_LON = 18.43, -66.00     # TJSJ launch site
 
 #@markdown ---
 #@markdown **High cloud (HCDC)**: dense high cloud blocks daytime heating and limits showers and thunderstorms.
-USE_HIGH_CLOUD = False  #@param {type:"boolean"}
+USE_HIGH_CLOUD = True  #@param {type:"boolean"}
 
 TODAY_STYLE = 'legacy'  # ['enhanced', 'legacy']
 GFS_MAX_AGE_DAYS = 92   # older soundings run on the sounding alone (Open-Meteo keeps ~3 months of past GFS runs)
@@ -51,7 +51,6 @@ CAPE_OFFSET = 100
 #@markdown **Graphic**
 BRAND_NAME = 'WFO'
 IMG_SCALE = 1
-DOWNLOAD_IMAGE = False  #@param {type:"boolean"}
 OUT_DIR = 'web_images'
 
 # Science constants (Gálvez & Davison 2016; Miller et al. 2019)
@@ -152,7 +151,7 @@ def risk_cat(ri):
             return name, color
     return 'High', '#d03b3b'
 
-HAZARDS = ['flood', 'tstorm', 'twind',  'hail','waterspout', 'tornado', 'streamer']
+HAZARDS = ['flood', 'tstorm', 'twind', 'hail', 'heat', 'waterspout', 'streamer']   # Tornado replaced by Extreme Heat
 
 # ---------------------------------------------------------------------------
 # High cloud cover (GFS HCDC) — dense cirrus/anvil shields cut solar heating, so the
@@ -160,7 +159,7 @@ HAZARDS = ['flood', 'tstorm', 'twind',  'hail','waterspout', 'tornado', 'streame
 # Tiers in % cloud -> risk points removed (1 point = 10 % Risk Index).
 # ---------------------------------------------------------------------------
 HC_TIERS = [(75, -3, 'Overcast high cloud'), (50, -2, 'Dense high cloud'), (25, -1, 'Considerable high cloud')]
-HC_HAZARDS = ('tstorm', 'flood', 'hail', 'twind', 'tornado')     # convective hazards reduced by high cloud
+HC_HAZARDS = ('tstorm', 'flood', 'hail', 'twind')     # convective hazards reduced by high cloud
 HC_WINDOW_H = (12, 18)          # UTC hours averaged: 8 a.m.–2 p.m. AST (morning heating window)
 HC_RH_RAMP = (50.0, 90.0)       # sounding check: 500–300 hPa mean RH -> 0–100 % estimated high cloud
 HC_COLOR = '#86b6ef'            # highlight color for cloud-related reductions
@@ -169,12 +168,12 @@ HC_COLOR = '#86b6ef'            # highlight color for cloud-related reductions
 FIXED_HAZARDS = ['flood', 'tstorm']
 OTHER_HAZARDS = [h for h in HAZARDS if h not in FIXED_HAZARDS]
 # Display order in every card: highest forecast skill first (forecaster's ranking). All 7 are always shown.
-SKILL_ORDER = ['flood', 'tstorm', 'twind', 'hail', 'waterspout', 'tornado', 'streamer']
+SKILL_ORDER = ['flood', 'tstorm', 'twind', 'hail', 'heat', 'waterspout', 'streamer']
 def pick_hazards(ri=None, n=None, floor=None):
     return list(SKILL_ORDER)
 
 # Forecast-skill tiers (display only; scores are not changed). 3 = higher, 2 = medium, 1 = lower.
-SKILL_TIER = {'flood': 3, 'tstorm': 3, 'twind': 2, 'hail': 2, 'waterspout': 1, 'tornado': 1, 'streamer': 1}
+SKILL_TIER = {'flood': 3, 'tstorm': 3, 'twind': 2, 'hail': 2, 'heat': 2, 'waterspout': 1, 'streamer': 1}
 SKILL_DOTS = {3: '●●●', 2: '●●○', 1: '●○○'}
 SKILL_KEY = 'Forecast skill  ●●● higher · ●●○ medium · ●○○ lower (outlined bars)'
 def low_skill(h):
@@ -184,21 +183,21 @@ def round10(pct):
     """Round a 0–100 % risk to the nearest 10 % (half up: 35 → 40)."""
     return float(min(100, max(0, 10 * math.floor(pct / 10 + 0.5))))
 HAZARD_LABEL = {'tstorm': 'Thunderstorms / Lightning', 'flood': 'Flooding Rain', 'hail': 'Hail',
-                'twind': 'Thunderstorm Wind', 'tornado': 'Tornado', 'waterspout': 'Fair-Wx Waterspout',
+                'twind': 'Thunderstorm Wind', 'heat': 'Extreme Heat', 'waterspout': 'Fair-Wx Waterspout',
                 'streamer': 'San Juan Streamer'}
 
 # ---------------------------------------------------------------------------
 # Local TJSJ sounding climatology (from the original script, unchanged)
-# rows: [min, low_50s, high_50s, max]; hazard order HAIL, TWIND, TORNADO, WATERSPOUT, FFW
+# rows: [min, low_50s, high_50s, max]; hazard order HAIL, TWIND, WATERSPOUT, FFW (tornado column removed)
 # ---------------------------------------------------------------------------
-CLIMO_HZ = ['hail', 'twind', 'tornado', 'waterspout', 'flood']
+CLIMO_HZ = ['hail', 'twind', 'waterspout', 'flood']   # tornado column removed
 CLIMO = {
-    'CAPE':  [[1200,1825,2600,3225],[375,1600,2500,3575],[375,1400,2525,3850],[0,600,2075,3825],[500,2000,3500,4000]],
-    'PWAT':  [[1.45,1.72,1.93,2.21],[1.41,1.78,2.17,2.7],[1.68,1.80,2.03,2.27],[0.99,1.58,2.0,2.47],[1.5,1.8,2.8,2.9]],
-    'KI':    [[20,26,33,38],[14,26,34,42],[21,25,31,38],[3,19,32,39],[20,30,45,46]],
-    'SHI':   [[-3.8,-1.8,1,2],[-5.2,-1.8,0.8,4],[-3.8,-1.8,1.8,3.8],[-4.1,-0.5,3.1,8.5],[-4.1,-1.5,0,5]],
-    'SWEAT': [[109,162,220,255],[135,185,235,298],[198,200,210,226],[101,168,212,272],[150,200,235,275]],
-    'TT':    [[39,44.5,49,51],[41,44.5,47,51],[37.5,42.8,47,50.8],[34.2,41,46,52.2],[39,43,46,52]],
+    'CAPE': [[1200,1825,2600,3225],[375,1600,2500,3575],[0,600,2075,3825],[500,2000,3500,4000]],
+    'PWAT': [[1.45,1.72,1.93,2.21],[1.41,1.78,2.17,2.7],[0.99,1.58,2.0,2.47],[1.5,1.8,2.8,2.9]],
+    'KI': [[20,26,33,38],[14,26,34,42],[3,19,32,39],[20,30,45,46]],
+    'SHI': [[-3.8,-1.8,1,2],[-5.2,-1.8,0.8,4],[-4.1,-0.5,3.1,8.5],[-4.1,-1.5,0,5]],
+    'SWEAT': [[109,162,220,255],[135,185,235,298],[101,168,212,272],[150,200,235,275]],
+    'TT': [[39,44.5,49,51],[41,44.5,47,51],[34.2,41,46,52.2],[39,43,46,52]],
 }
 SC = dict(  # monthly climatology, index 0 = January
     pwat=[1.5,1.47,1.5,1.7,1.96,1.96,1.9,2.05,2.12,2.15,1.95,1.8],
@@ -624,79 +623,97 @@ def latest_synoptic(now=None):
     t = now - dt.timedelta(hours=3)          # allow ~3 h for the data to reach UWyo
     return t.replace(hour=0 if t.hour < 12 else 12, minute=0, second=0, microsecond=0)
 
-def fetch_uwyo(station_id, when):
-    import urllib.parse
-    import requests
-    from bs4 import BeautifulSoup
+def _ensure_siphon():
+    """siphon >= 0.11 reads UWyo's current (wsgi, CSV) service; older versions call the retired cgi page."""
+    try:
+        import siphon
+        if tuple(int(x) for x in siphon.__version__.split('.')[:2]) >= (0, 11):
+            return
+    except ImportError:
+        pass
+    import subprocess, sys, importlib
+    print('Installing siphon ≥ 0.11 …')
+    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--upgrade', 'siphon>=0.11'], check=True)
+    for m in [k for k in sys.modules if k == 'siphon' or k.startswith('siphon.')]:
+        del sys.modules[m]
+    importlib.invalidate_caches()
 
-    # Format datetime as expected by Wyoming: YYYY-MM-DD HH:00:00
-    dt_str = f"{when.year}-{when.month:02d}-{when.day:02d} {when.hour:02d}:00:00"
-    encoded_dt = urllib.parse.quote(dt_str)
-
-    # Modern Wyoming WSGI endpoint
-    url = (
-        f"https://weather.uwyo.edu/wsgi/sounding?"
-        f"datetime={encoded_dt}&id={station_id}&src=BUFR&type=TEXT:LIST"
-    )
-
-    fallback_url = (
-        f"https://weather.arcc.uwyo.edu/wsgi/sounding?"
-        f"datetime={encoded_dt}&id={station_id}&src=BUFR&type=TEXT:LIST"
-    )
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Referer": "https://weather.uwyo.edu/upperair/sounding.html",
-    }
-
-    errors = []
-    for target_url in [url, fallback_url]:
+def fetch_siphon(station, when, tries=4):
+    """TJSJ sounding through siphon's WyomingUpperAir (UWyo wsgi CSV). Retries with back-off when UWyo is busy.
+    Returns (df in the script's UWyo column names, {} indices, source label); indices are computed from the profile."""
+    _ensure_siphon()
+    from siphon.simplewebservice.wyoming import WyomingUpperAir
+    w, last = None, None
+    for k in range(tries):
         try:
-            resp = requests.get(target_url, headers=headers, timeout=25)
-            if resp.status_code == 200:
-                text = resp.text
-                raw_table = None
-                if "<PRE>" in text.upper():
-                    soup = BeautifulSoup(text, "html.parser")
-                    pre = soup.find("pre")
-                    if pre and pre.text.strip():
-                        raw_table = pre.text
-                elif "PRES" in text and "HGHT" in text:
-                    raw_table = text
+            w = WyomingUpperAir.request_data(when, str(station))
+            break
+        except Exception as e:                       # 503 busy / no data yet / network
+            last = e.__cause__ or e
+            if '404' in str(last) or 'No data' in str(last):
+                break
+            time.sleep(5 * (k + 1))
+    if w is None:
+        raise RuntimeError(f'siphon/WyomingUpperAir: {last}')
+    units = getattr(w, 'units', {}) or {}
+    kt = 1.94384 if str(units.get('speed', 'knot')).lower() in ('m/s', 'meter / second', 'meter/second') else 1.0
+    df = pd.DataFrame({'PRES': pd.to_numeric(w['pressure'], errors='coerce'),
+                       'HGHT': pd.to_numeric(w['height'], errors='coerce'),
+                       'TEMP': pd.to_numeric(w['temperature'], errors='coerce'),
+                       'DWPT': pd.to_numeric(w['dewpoint'], errors='coerce'),
+                       'DRCT': pd.to_numeric(w['direction'], errors='coerce'),
+                       'SKNT': pd.to_numeric(w['speed'], errors='coerce') * kt})
+    df = df.dropna(subset=['PRES', 'TEMP'])
+    if len(df) < 10 or df.PRES.min() > 300:
+        raise RuntimeError(f'siphon/WyomingUpperAir: incomplete sounding ({len(df)} levels, top {df.PRES.min():.0f} hPa)')
+    ix = {}
+    if 'pw' in w and pd.notna(w['pw'].iloc[0]):
+        ix['PWAT_MM'] = float(w['pw'].iloc[0])
+    return df, ix, f'UWyo via siphon (WyomingUpperAir) {when:%Y-%m-%d %HZ}'
 
-                if raw_table:
-                    df, ix = parse_uwyo_text(raw_table)
-                    # Return 3 distinct values: df, ix, and the source URL string
-                    return df, ix, target_url
+def fetch_uwyo(station, when, tries=3):
+    """Backup: UWyo text list (wsgi) parsed directly; keeps UWyo's own indices when it answers."""
+    urls = [
+        (f"https://weather.uwyo.edu/wsgi/sounding?datetime={when:%Y-%m-%d}%20{when:%H}:00:00"
+         f"&id={station}&src=BUFR&type=TEXT:LIST"),
+        (f"https://weather.uwyo.edu/wsgi/sounding?datetime={when:%Y-%m-%d}%20{when:%H}:00:00"
+         f"&id={station}&src=UNKNOWN&type=TEXT:LIST"),
+    ]
+    errors = []
+    for url in urls:
+        for k in range(tries):
+            try:
+                r = requests.get(url, timeout=40, headers={'User-Agent': 'TJSJ-risk-notebook (Colab)'})
+                if r.status_code == 503:            # UWyo throttles; back off and retry
+                    if k == tries - 1:
+                        errors.append(f'{url.split("?")[0]}: 503 busy after {tries} tries')
+                    time.sleep(5 * (k + 1)); continue
+                r.raise_for_status()
+                df, ix = parse_uwyo_text(r.text)
+                return df, ix, url
+            except Exception as e:
+                errors.append(f'{url.split("?")[0]}: {e}')
+                break
+    raise RuntimeError('UWyo text: ' + ' | '.join(errors))
 
-                errors.append(f"{target_url}: 200 OK but no tabular data inside <pre>")
-            else:
-                errors.append(f"{target_url}: HTTP {resp.status_code}")
+def fetch_sounding(station, when):
+    """siphon first (as requested), then the UWyo text page."""
+    errors = []
+    for f in (fetch_siphon, fetch_uwyo):
+        try:
+            return f(station, when)
         except Exception as e:
-            errors.append(f"{target_url}: {str(e)}")
+            errors.append(str(e)); print('⚠️', e)
+    raise RuntimeError(f'Could not get the {when:%Y-%m-%d %HZ} sounding for {station}:\n  ' + '\n  '.join(errors)
+                       + '\n  Tip: a sounding takes ~2–3 h to reach UWyo; try again later, or set SOUNDING_TEXT_FILE.')
 
-    raise RuntimeError("Could not get the sounding from Uwyo:\n " + "\n ".join(errors))
-    
 def load_raob():
-    # If USE_LATEST_SOUNDING was already computed at the top of the file, use YEAR, MONTH, DAY, HOUR directly
-    when = dt.datetime(YEAR, MONTH, DAY, HOUR)
+    when = latest_synoptic() if USE_LATEST_SOUNDING else dt.datetime(YEAR, MONTH, DAY, HOUR)
     if SOUNDING_TEXT_FILE:
         df, ix = parse_uwyo_text(open(SOUNDING_TEXT_FILE, encoding='utf-8', errors='ignore').read())
         src = SOUNDING_TEXT_FILE
     else:
-        try:
-            df, ix, src = fetch_uwyo(STATION_ID, when)
-        except RuntimeError as primary_err:
-            # Fallback: if the current cycle (e.g., 12Z) hasn't posted yet on Wyoming, retry previous 12h cycle
-            if USE_LATEST_SOUNDING:
-                prev_when = when - dt.timedelta(hours=12)
-                print(f"⚠️ Primary sounding {when:%Y-%m-%d %HZ} not yet available. Retrying previous cycle: {prev_when:%Y-%m-%d %HZ}...")
-                df, ix, src = fetch_uwyo(STATION_ID, prev_when)
-                when = prev_when
-            else:
-                raise primary_err
-
+        df, ix, src = fetch_sounding(STATION_ID, when)
     snd = Sounding(df, ix, meta=dict(station=STATION_ID, valid=when, url=src), source='RAOB')
     snd.complete_indices()
     return snd
@@ -729,7 +746,8 @@ def fetch_gfs_point(lat, lon, t_obs, days_ahead=3):
         hourly += [f'temperature_{p}hPa', f'relative_humidity_{p}hPa', f'geopotential_height_{p}hPa']
     for p in WIND_LEVELS:
         hourly += [f'wind_speed_{p}hPa', f'wind_direction_{p}hPa']
-    hourly += ['surface_pressure', 'cape', 'lifted_index', 'cloud_cover_high', 'wind_speed_10m', 'wind_direction_10m']
+    hourly += ['surface_pressure', 'cape', 'lifted_index', 'cloud_cover_high', 'cloud_cover_low', 'cloud_cover_mid',
+               'wind_speed_10m', 'wind_direction_10m']
     js = _om_get(dict(latitude=lat, longitude=lon, hourly=','.join(hourly), past_days=past, forecast_days=fwd,
                       wind_speed_unit='kn', timezone='GMT', cell_selection='sea', elevation='nan'))
     h = pd.DataFrame(js['hourly']); h['time'] = pd.to_datetime(h['time'])
@@ -775,7 +793,7 @@ LIFT_DIV_STRONG, LIFT_DIV_MOD = 2e-5, 1e-5      # s-1, 200 hPa divergence (Playb
 LIFT_VORT_MOD = 1e-5              # s-1, 700 hPa cyclonic vorticity: tropical wave / trough
 TUTT_VORT = 2e-5                  # s-1, 200 hPa cyclonic vorticity: TUTT / upper trough overhead
 LIFT_MULT = {'strong': 1.0, 'moderate': 1.0, 'weak': 0.85, 'none_day': 0.85, 'none_night': 0.55}
-LIFT_HAZARDS = ('tstorm', 'flood', 'hail', 'twind', 'tornado')
+LIFT_HAZARDS = ('tstorm', 'flood', 'hail', 'twind')
 
 def fetch_gfs_stencil(lat, lon, t_obs, days_ahead=3, dx=LIFT_DX):
     now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
@@ -805,11 +823,15 @@ def gfs_env_for(snd, h_center=None, stencil=None):
     t = snd.meta['valid']
     day = t.date() if t.hour <= HC_WINDOW_H[1] else (t + dt.timedelta(days=1)).date()
     night = (t.hour == 0)                                   # 00Z = 8 p.m. AST sounding: evening/overnight regime
-    E = dict(day=day, lift=None, mult=1.0, div200=np.nan, vort700=np.nan, vort200=np.nan, sfc_wind=np.nan)
+    E = dict(day=day, lift=None, mult=1.0, div200=np.nan, vort700=np.nan, vort200=np.nan, sfc_wind=np.nan, cloud_lm=np.nan)
     if h_center is not None and 'wind_speed_10m' in h_center:
         t0 = dt.datetime.combine(day, dt.time(HC_WINDOW_H[0])); t1 = dt.datetime.combine(day, dt.time(HC_WINDOW_H[1]))
         w = h_center.loc[(h_center.time >= t0) & (h_center.time <= t1), 'wind_speed_10m'].astype(float)
         E['sfc_wind'] = float(w.mean()) if w.notna().any() else np.nan
+        if 'cloud_cover_low' in h_center:                      # heat sky check: low or mid cloud, whichever is more
+            win = h_center.loc[(h_center.time >= t0) & (h_center.time <= t1)]
+            lm = np.fmax(win['cloud_cover_low'].astype(float), win['cloud_cover_mid'].astype(float))
+            E['cloud_lm'] = float(lm.mean()) if lm.notna().any() else np.nan
     if stencil:
         R_E = 6.371e6; dxm = R_E * math.cos(math.radians(stencil['_lat'])) * math.radians(stencil['_dx']); dym = R_E * math.radians(stencil['_dx'])
         def dd(p):
@@ -940,6 +962,8 @@ def diagnostics(snd, lapse_mode='corrected', cape_offset=100):
              PWAT=round(ix['PWAT_MM'] / 25.4, 2))
     D['thick1000_500'] = Z(500) - Z(1000)
     D['thick700_500'] = Z(500) - Z(700)
+    D['thick1000_850'] = Z(850) - Z(1000)
+    D['Z250'] = Z(250); D['T925'] = T(925)
     D['dthe'] = L[1000]['THTE'] - min(L[500]['THTE'], L[400]['THTE'])
     def lr(p1, p2): return (T(p1) - T(p2)) / ((Z(p2) - Z(p1)) / 1000.0)
     if lapse_mode == 'legacy':
@@ -960,6 +984,7 @@ def diagnostics(snd, lapse_mode='corrected', cape_offset=100):
     D['wspd_015'], D['wdir_015'] = _vec_mean_wind(snd, (1000, 925, 850))
     D['wspd_03'], D['wdir_03'] = _vec_mean_wind(snd, (1000, 925, 850, 700))
     D['wspd_87'], _ = _vec_mean_wind(snd, (850, 700))
+    D['wspd_01'], D['wdir_01'] = _vec_mean_wind(snd, (1000, 925))          # ~0–1 km (surface to ~800 m)
     for p in (1000, 925, 850, 700, 250):
         D[f'dir{p}'], D[f'spd{p}'] = snd.wind(p)
     D['spd_shear'] = ((D['spd850'] - D['spd1000']) / 0.5) / 1400 * 1000   # legacy units, thresholds tuned to it
@@ -972,6 +997,292 @@ def diagnostics(snd, lapse_mode='corrected', cape_offset=100):
     D['sc'] = {k: v[m] for k, v in SC.items()}
     D.update(extra_diag(snd))
     return D
+
+# ---------------------------------------------------------------------------
+# Extreme Heat potential (replaces Tornado). Heat is normal in Puerto Rico, so this hazard scores
+# how far the low-level airmass sits ABOVE the monthly TJSJ sounding climatology (forecaster-supplied),
+# plus the setup that lets that air heat the coastal plains: light low-level wind, S–SE flow
+# (downslope / land trajectory to the north coast), sunny skies, little rain, subsidence and ridging.
+# Anomalies are always measured on a 12Z (8 a.m. AST) profile to match the climatology:
+# the observed 12Z sounding, or obs + GFS change to 12Z of that day for 00Z soundings and later afternoons.
+# ---------------------------------------------------------------------------
+# Monthly TJSJ sounding climatology. 8 values: [min, −2σ, P25, P50, P75, P97.5, +2σ, max]
+# 7 values (PWAT): [min, −2σ, P25, P50, P75, +2σ, max]
+SND_CLIMO = {
+    "pwat": {
+        1: [0.548, 0.876, 1.189, 1.337, 1.502, 1.947, 2.218],
+        2: [0.568, 0.837, 1.147, 1.303, 1.465, 1.894, 2.569],
+        3: [0.702, 0.862, 1.167, 1.325, 1.490, 1.984, 2.252],
+        4: [0.707, 0.930, 1.290, 1.480, 1.688, 2.192, 2.628],
+        5: [0.898, 1.139, 1.527, 1.762, 1.981, 2.456, 2.679],
+        6: [0.902, 1.266, 1.600, 1.774, 1.981, 2.394, 2.558],
+        7: [0.989, 1.250, 1.590, 1.754, 1.959, 2.412, 2.632],
+        8: [0.938, 1.291, 1.644, 1.828, 2.026, 2.494, 2.746],
+        9: [0.991, 1.381, 1.720, 1.910, 2.081, 2.447, 2.731],
+        10: [1.033, 1.345, 1.714, 1.905, 2.106, 2.503, 2.744],
+        11: [0.704, 1.088, 1.516, 1.748, 1.985, 2.443, 2.674],
+        12: [0.644, 0.887, 1.256, 1.446, 1.656, 2.262, 2.701],
+    },
+    "z250": {
+        1:  [10740, 10800, 10870, 10900, 10930, 11000, 11010, 11020],
+        2:  [10710, 10780, 10860, 10900, 10930, 11000, 11010, 11020],
+        3:  [10710, 10780, 10860, 10900, 10930, 11000, 11010, 11020],
+        4:  [10760, 10800, 10880, 10910, 10930, 11010, 11020, 11040],
+        5:  [10780, 10850, 10900, 10930, 10960, 11010, 11020, 11030],
+        6:  [10822, 10870, 10920, 10940, 10960, 11020, 11030, 11050],
+        7:  [10810, 10870, 10920, 10940, 10960, 11000, 11010, 11020],
+        8:  [10850, 10900, 10940, 10960, 10970, 11010, 11030, 11060],
+        9:  [10820, 10880, 10930, 10950, 10970, 11010, 11020, 11030],
+        10: [10800, 10850, 10910, 10940, 10960, 11010, 11020, 11030],
+        11: [10780, 10840, 10890, 10920, 10950, 11000, 11010, 11030],
+        12: [10710, 10810, 10880, 10920, 10940, 11000, 11010, 11020],
+    },
+    "thk1000_500": {
+        1:  [5592, 5673.48, 5706, 5721, 5738, 5768, 5767.91, 5777],
+        2:  [5627, 5662.18, 5698, 5718, 5737, 5777, 5773.11, 5803],
+        3:  [5633, 5662.92, 5701, 5719, 5737, 5783, 5774.68, 5808],
+        4:  [5651, 5684.08, 5715, 5730, 5744, 5783, 5774.87, 5805],
+        5:  [5675, 5705.55, 5732, 5745, 5758, 5792, 5784.38, 5811],
+        6:  [5699, 5721.53, 5743, 5753, 5764, 5791, 5784.84, 5809],
+        7:  [5703, 5725.67, 5745, 5755, 5765, 5785, 5783.17, 5799],
+        8:  [5688, 5734.36, 5754, 5763, 5772, 5797, 5791.56, 5837],
+        9:  [5710, 5736.55, 5757, 5766, 5774, 5797, 5793.71, 5843],
+        10: [5673, 5728.46, 5751, 5762, 5772, 5800, 5795.07, 5842],
+        11: [5680, 5710.37, 5737, 5750, 5761, 5789, 5786.23, 5802],
+        12: [5642, 5691.65, 5721, 5735, 5747, 5776, 5775.22, 5796],
+    },
+    "thk1000_850": {
+        1:  [1348, 1385.94, 1395, 1398, 1402, 1415, 1411.16, 1423],
+        2:  [1363, 1382.5,  1392, 1397, 1401, 1417, 1410.94, 1447],
+        3:  [1362, 1382.19, 1393, 1397, 1402, 1420, 1413.47, 1438],
+        4:  [1367, 1386.4,  1398, 1402, 1407, 1423, 1418.73, 1445],
+        5:  [1380, 1393.82, 1404, 1409, 1414, 1427, 1423.95, 1437],
+        6:  [1373, 1399.52, 1409, 1413, 1417, 1430, 1426.46, 1449],
+        7:  [1389, 1400.93, 1410, 1414, 1417, 1430, 1426.72, 1444],
+        8:  [1373, 1402.6,  1413, 1416, 1419, 1432, 1429.14, 1450],
+        9:  [1368, 1402.71, 1413, 1417, 1420, 1435, 1430.44, 1451],
+        10: [1376, 1401.01, 1411, 1415, 1419, 1432, 1428.84, 1452],
+        11: [1383, 1395.38, 1405, 1410, 1414, 1427, 1423.57, 1434],
+        12: [1365, 1388.2,  1398, 1403, 1407, 1419, 1416.64, 1434],
+    },
+    "rh700_500": {
+        1:  [1.0, 0.80798,  9.0, 20.0, 35.0, 72.5, 58.9598, 90.0],
+        2:  [1.5, 2.4456,   9.5, 18.5, 33.0, 83.0, 60.9731, 95.0],
+        3:  [1.0, 4.98839, 12.0, 21.5, 36.0, 86.5, 61.4515, 96.0],
+        4:  [1.5, 6.1214,  17.5, 29.5, 46.5, 89.5, 72.0869, 100.0],
+        5:  [2.0, 6.110963, 27.5, 43.0, 62.0, 93.5, 90.6016, 99.0],
+        6:  [5.5, 6.63565, 30.0, 41.5, 57.5, 88.5, 81.5105, 98.0],
+        7:  [5.5, 6.10043, 25.0, 35.0, 49.5, 88.5, 76.067,  96.0],
+        8:  [2.0, 6.94979, 27.0, 38.0, 53.5, 89.0, 79.3716, 98.0],
+        9:  [2.0, 8.39737, 32.5, 44.0, 60.0, 91.0, 84.4477, 99.0],
+        10: [1.5, 6.26088, 32.5, 47.0, 63.0, 93.0, 90.1364, 99.5],
+        11: [1.5, 4.98167, 22.5, 38.0, 56.5, 93.5, 86.9409, 98.5],
+        12: [1.5, 1.2597,  11.5, 22.0, 40.0, 83.0, 66.5825, 97.0],
+    },
+    "lr700_500": {
+        1:  [2.25926, 3.96635, 5.07407, 5.59259, 6.18519, 7.22222, 7.21252, 8.62963],
+        2:  [2.85185, 3.98327, 5.14815, 5.74074, 6.25926, 7.51852, 7.35217, 8.03704],
+        3:  [3.22222, 3.96973, 5.00000, 5.59259, 6.11111, 7.29630, 7.15856, 8.25926],
+        4:  [2.48148, 3.90554, 4.92593, 5.37037, 5.88889, 7.07407, 6.86038, 7.81481],
+        5:  [3.14815, 4.51736, 5.29630, 5.66667, 6.03704, 7.07407, 6.82812, 7.81481],
+        6:  [3.44444, 4.66974, 5.44444, 5.88889, 6.25926, 7.22222, 7.02786, 8.25926],
+        7:  [3.00000, 4.56614, 5.44444, 5.81481, 6.25926, 7.44444, 7.13185, 8.03704],
+        8:  [3.66667, 4.61008, 5.37037, 5.74074, 6.11111, 7.22222, 6.89934, 8.62963],
+        9:  [2.81481, 4.82058, 5.51852, 5.81481, 6.11111, 6.92593, 6.77528, 7.74074],
+        10: [3.88889, 4.69751, 5.37037, 5.74074, 6.03704, 6.77778, 6.71206, 7.37037],
+        11: [2.55556, 4.42885, 5.29630, 5.59259, 5.96296, 7.00000, 6.78526, 7.81481],
+        12: [3.00000, 4.09806, 5.14815, 5.59259, 6.11111, 7.29630, 7.10413, 7.96296],
+    },
+    "t500": {
+        1:  [-15.9, -10.8289, -8.3, -7.1, -5.9, -3.5, -3.6021, -2.1],
+        2:  [-14.9, -11.5172, -8.7, -7.1, -5.9, -3.1, -3.21974, -1.1],
+        3:  [-14.9, -11.0457, -8.5, -7.1, -5.9, -3.5, -3.4684, -2.1],
+        4:  [-13.3, -10.3915, -7.9, -6.7, -5.7, -2.3, -3.22301, -0.7],
+        5:  [-11.5, -9.69815, -7.9, -6.9, -5.9, -3.9, -4.16782, -1.3],
+        6:  [-11.5, -9.57936, -7.9, -6.9, -6.1, -3.9, -4.41946, -2.5],
+        7:  [-12.7, -9.47666, -7.7, -6.7, -5.9, -3.9, -4.15369, -0.7],
+        8:  [-11.5, -8.82237, -7.1, -6.3, -5.5, -3.5, -3.84134, -2.3],
+        9:  [-13.1, -8.83121, -7.3, -6.5, -5.7, -3.7, -4.10235, -0.7],
+        10: [-11.1, -9.0155,  -7.3, -6.3, -5.5, -3.5, -3.75062, -1.2],
+        11: [-12.3, -9.48001, -7.5, -6.5, -5.5, -3.1, -3.57947, -1.5],
+        12: [-14.9, -10.1007, -7.7, -6.7, -5.7, -3.3, -3.45135, -2.3],
+    },
+    "wind925": {
+        1:  [1, 2.98599, 11, 16, 21, 30, 28.7626, 36],
+        2:  [1, 3.32364, 11, 16, 20, 29, 27.7135, 35],
+        3:  [0, 2.18878,  9, 14, 18, 27, 25.4318, 34],
+        4:  [0, 1.25297,  9, 13, 17, 27, 24.5808, 33],
+        5:  [0, 1.61853,  9, 13, 18, 26, 24.9221, 36],
+        6:  [1, 5.6178,  12, 17, 20, 27, 26.5768, 31],
+        7:  [2, 8.23691, 15, 18, 21, 32, 28.2389, 42],
+        8:  [0, 4.61231, 13, 16, 19, 37, 28.265,  47],
+        9:  [1, 1.06612, 10, 14, 18, 36, 27.1652, 59],
+        10: [1, 1.82111,  9, 13, 16, 27, 23.7305, 32],
+        11: [1, 2.26207, 10, 14, 19, 29, 26.7422, 43],
+        12: [1, 3.45999, 12, 16, 20, 31, 28.2134, 43],
+    },
+    "rh850_700": {
+        1:  [7.5,  21.1201, 45.0, 52.0, 64.5, 96.5, 89.7719, 98.5],
+        2:  [7.0,  21.4326, 43.5, 51.5, 62.0, 95.0, 86.6059, 100.0],
+        3:  [10.0, 21.3743, 44.0, 52.5, 64.5, 95.0, 89.2347, 100.0],
+        4:  [10.5, 25.5079, 47.5, 58.5, 74.0, 95.5, 95.8836, 99.5],
+        5:  [10.5, 33.1571, 53.5, 66.5, 78.0, 96.5, 98.0617, 100.0],
+        6:  [11.0, 32.7324, 52.0, 62.0, 72.5, 93.5, 91.8842, 98.5],
+        7:  [14.5, 33.9037, 53.0, 61.0, 71.0, 94.0, 89.7682, 99.0],
+        8:  [3.5,  35.7567, 54.5, 64.5, 74.0, 93.5, 92.3529, 100.0],
+        9:  [10.5, 38.3247, 57.0, 67.0, 76.0, 94.5, 93.4722, 99.5],
+        10: [15.0, 40.2236, 60.0, 70.0, 79.0, 95.0, 96.8554, 100.0],
+        11: [10.0, 32.9980, 53.0, 67.5, 80.0, 97.0, 100.3300, 100.0],
+        12: [4.0,  24.2038, 46.5, 54.5, 70.5, 96.5, 92.5367, 100.0],
+    },
+    "lr850_700": {
+        1:  [4.00, 4.60, 5.10, 5.40, 5.70, 6.40, 6.80, 7.50],
+        2:  [4.10, 4.60, 5.10, 5.40, 5.70, 6.40, 6.80, 7.40],
+        3:  [4.10, 4.70, 5.10, 5.40, 5.70, 6.40, 6.80, 7.70],
+        4:  [4.20, 4.70, 5.20, 5.40, 5.70, 6.40, 6.80, 7.60],
+        5:  [4.30, 4.80, 5.30, 5.50, 5.80, 6.40, 6.80, 7.60],
+        6:  [4.30, 4.90, 5.40, 5.60, 5.90, 6.50, 6.90, 7.70],
+        7:  [4.40, 4.90, 5.40, 5.60, 5.90, 6.50, 6.90, 7.60],
+        8:  [4.40, 5.00, 5.50, 5.70, 6.00, 6.60, 6.90, 7.70],
+        9:  [4.40, 5.00, 5.50, 5.70, 6.00, 6.60, 6.90, 7.50],
+        10: [4.40, 5.00, 5.50, 5.70, 6.00, 6.60, 6.90, 7.40],
+        11: [4.30, 4.90, 5.40, 5.60, 5.90, 6.50, 6.90, 7.40],
+        12: [4.10, 4.80, 5.30, 5.50, 5.80, 6.40, 6.90, 7.50],
+    },
+    "thetae850": {
+        1:  [306.3, 317.01,  325.4, 329.6, 333.5, 339.7, 341.035, 344.5],
+        2:  [304.8, 315.825, 324.1, 328.3, 332.2, 340.2, 339.954, 346.9],
+        3:  [302.3, 316.397, 324.7, 328.8, 332.8, 341.0, 340.579, 349.0],
+        4:  [305.8, 318.395, 327.4, 331.8, 335.9, 345.7, 344.552, 351.6],
+        5:  [306.8, 323.608, 332.2, 336.6, 340.5, 348.5, 348.541, 353.7],
+        6:  [310.4, 324.567, 332.9, 337.7, 341.4, 348.6, 349.18,  353.3],
+        7:  [313.9, 325.953, 334.8, 338.8, 342.4, 350.1, 350.424, 353.8],
+        8:  [310.6, 327.198, 336.0, 340.0, 343.9, 351.1, 351.841, 353.3],
+        9:  [307.1, 327.972, 336.5, 340.3, 343.9, 350.0, 351.411, 352.9],
+        10: [310.0, 327.971, 336.3, 340.1, 343.4, 350.1, 350.997, 354.7],
+        11: [309.4, 324.683, 333.0, 337.5, 341.0, 348.2, 348.813, 354.3],
+        12: [305.3, 319.181, 328.1, 332.5, 336.4, 344.5, 344.563, 349.1],
+    },
+    "t925": {
+        1:  [14.0, 16.4488, 17.8, 18.6, 19.2, 20.8, 20.6441, 22.2],
+        2:  [15.4, 15.9146, 17.5, 18.2, 19.0, 21.2, 20.5920, 23.0],
+        3:  [15.0, 15.8986, 17.6, 18.4, 19.4, 21.6, 21.0856, 23.2],
+        4:  [15.6, 16.8364, 18.5, 19.2, 20.0, 22.4, 21.7859, 23.4],
+        5:  [17.0, 18.1507, 19.6, 20.6, 21.2, 23.2, 22.8149, 25.2],
+        6:  [18.4, 19.5600, 20.6, 21.2, 21.8, 23.4, 22.9340, 24.2],
+        7:  [18.8, 19.7600, 20.8, 21.2, 21.8, 23.0, 22.7807, 24.4],
+        8:  [19.0, 20.2523, 21.2, 21.6, 22.2, 23.6, 23.1544, 25.8],
+        9:  [18.8, 20.2765, 21.4, 21.8, 22.4, 24.2, 23.5421, 25.6],
+        10: [19.2, 20.0319, 21.0, 21.6, 22.2, 23.4, 23.1652, 24.4],
+        11: [16.8, 18.4922, 19.8, 20.6, 21.2, 22.8, 22.5767, 25.0],
+        12: [16.4, 17.2316, 18.6, 19.4, 20.2, 21.6, 21.4710, 23.0],
+    },
+}
+HEAT_CLIMO_HOUR = 12               # UTC hour the climatology represents (12Z = 8 a.m. AST)
+HEAT_COOL_MONTHS = (12, 1, 2, 3)   # dry/cool season: warm anomalies rarely reach heat-stress levels
+HEAT_COOL_CAP = 4.0                # points (40 %) max in the cool season
+HEAT_SSE = (120, 220)              # 0–1 km wind direction (°) for downslope / land trajectory to the north coast
+
+def snd_clim(var, month):
+    """Percentiles, mean and σ of one climatology variable for a month (mean/σ from the ±2σ values)."""
+    v = SND_CLIMO[var][month]
+    if len(v) == 7:
+        mn, m2, p25, p50, p75, p2, mx = v; p975 = np.nan
+    else:
+        mn, m2, p25, p50, p75, p975, p2, mx = v
+    mu, sd = (m2 + p2) / 2, max((p2 - m2) / 4, 1e-6)
+    return dict(min=mn, p25=p25, p50=p50, p75=p75, p975=p975, max=mx, mean=mu, sd=sd)
+
+def heat_z(var, x, month):
+    if x is None or not np.isfinite(x): return np.nan
+    c = snd_clim(var, month)
+    return (x - c['mean']) / c['sd']
+
+def _pct_word(var, x, month):
+    c = snd_clim(var, month)
+    if np.isfinite(c['p975']) and x >= c['p975']: return '>P97.5'
+    if x >= c['p75']: return '>P75'
+    if x <= c['p25']: return '<P25'
+    return 'near median'
+
+def heat_items(D, g, hc=None, env=None, rain_pts=0.0):
+    """Extreme-heat ledger items (delta, label, reason, src) from the 12Z-equivalent profile D."""
+    m = D['month']; out = []; env = env or {}
+    def add(d, lab, why):
+        if d: out.append((float(d), lab, why, 'heat'))
+    def z_tier(z, steps):
+        for thr, pts in steps:
+            if (thr >= 0 and z >= thr) or (thr < 0 and z <= thr): return pts
+        return 0.0
+    # 1. Warm low levels (the core signal)
+    t9 = D['T925']; z9 = heat_z('t925', t9, m)
+    if np.isfinite(z9):
+        add(z_tier(z9, [(2, 3), (1.5, 2.5), (1, 2), (0.5, 1), (-1, -1.5), (-0.5, -0.5)]),
+            f'T925 {t9:.1f} °C ({z9:+.1f}σ)', f'925 hPa temperature {t9:.1f} °C, {_pct_word("t925", t9, m)} for the month ({z9:+.1f}σ)')
+    k1 = D['thick1000_850']; zk1 = heat_z('thk1000_850', k1, m)
+    if np.isfinite(zk1):
+        add(z_tier(zk1, [(2, 2), (1, 1.5), (0.5, 0.5), (-1, -1)]),
+            f'Thk 1000–850 {k1:.0f} m ({zk1:+.1f}σ)', f'1000–850 hPa thickness {k1:.0f} m, {_pct_word("thk1000_850", k1, m)} (warm boundary layer)')
+    k5 = D['thick1000_500']; zk5 = heat_z('thk1000_500', k5, m)
+    if np.isfinite(zk5):
+        add(z_tier(zk5, [(1.5, 1), (1, 0.5), (-1, -0.5)]),
+            f'Thk 1000–500 {k5:.0f} m ({zk5:+.1f}σ)', f'1000–500 hPa thickness {k5:.0f} m, {_pct_word("thk1000_500", k5, m)} (deep warm column)')
+    # 2. Low-level moisture / heat content (raises the heat index)
+    te = D['Te850']; zte = heat_z('thetae850', te, m)
+    if np.isfinite(zte):
+        add(z_tier(zte, [(1.5, 1), (1, 0.5), (-1, -0.5)]),
+            f'θe 850 {te:.0f} K ({zte:+.1f}σ)', f'850 hPa θe {te:.0f} K, {_pct_word("thetae850", te, m)}: warm, humid low levels raise the heat index')
+    # 3. Light low-level wind (little ventilation; sea breeze dominates) and S–SE flow (downslope to the north coast)
+    w9 = D['spd925']; c = snd_clim('wind925', m)
+    if np.isfinite(w9):
+        p10 = (c['p25'] + snd_clim('wind925', m)['min']) / 2
+        d_ = 1.5 if w9 <= max(p10, 5) else 1.0 if w9 <= c['p25'] else -1.5 if w9 >= c['p975'] else -0.5 if w9 >= c['p75'] else 0.0
+        add(d_, f'925 wind {w9:.0f} kt', f'925 hPa (~0–1 km) wind {w9:.0f} kt vs monthly P25 {c["p25"]:.0f} / P75 {c["p75"]:.0f} kt')
+    wd = D['wdir_01']
+    if np.isfinite(wd) and HEAT_SSE[0] <= wd <= HEAT_SSE[1] and D['wspd_01'] >= 3:
+        add(1.0, f'S–SE flow {wd:.0f}°', f'0–1 km wind from {wd:.0f}°: downslope and land trajectory warm the north coast (San Juan metro)')
+    # 4. Sky cover and rain
+    hcp = (hc or {}).get('pct', np.nan)
+    if np.isfinite(hcp):
+        add(-1.5 if hcp >= 75 else -1.0 if hcp >= 50 else -0.5 if hcp >= 25 else 0.0, f'High cloud {hcp:.0f}%', f'High cloud {hcp:.0f}% (8 a.m.–2 p.m.) filters sunshine')
+    lm = env.get('cloud_lm', np.nan)
+    if np.isfinite(lm):
+        add(-1.0 if lm >= 70 else -0.5 if lm >= 50 else 0.5 if lm <= 20 else 0.0, f'Low/mid cloud {lm:.0f}%', f'GFS low/mid cloud {lm:.0f}% (8 a.m.–2 p.m.)')
+    if rain_pts >= 4:
+        add(-1.5 if rain_pts >= 6 else -1.0, f'Showers/T-storms {10*min(rain_pts,10):.0f}%', 'Rain and storm outflow cool the afternoon')
+    # 5. Subsidence, Saharan air and ridging
+    r87, pw = D['RH87'], D['PWAT']
+    cr, cp = snd_clim('rh850_700', m), snd_clim('pwat', m)
+    ii = g['II'] if g else np.nan
+    if r87 <= cr['p25'] and pw <= cp['p25']:
+        add(1.0, 'Dry airmass / SAL', f'RH 850–700 {r87:.0f}% and PWAT {pw:.2f} in both below P25: sunny, hazy (Saharan air) days run hot')
+    elif np.isfinite(ii) and ii <= -10 and r87 <= cr['p50']:
+        add(0.5, 'Subsidence inversion', f'Inversion index {ii:.0f} with RH 850–700 {r87:.0f}%: subsidence and few clouds')
+    z25 = D.get('Z250', np.nan); cz = snd_clim('z250', m)
+    if np.isfinite(z25):
+        add(1.0 if z25 >= cz['p975'] else 0.5 if z25 >= cz['p75'] else 0.0, f'250 hPa ridge {z25:.0f} m', f'250 hPa height {z25:.0f} m, {_pct_word("z250", z25, m)}: upper ridge / subsidence')
+    return out
+
+def heat_note(D):
+    """One technical-notes line with the heat inputs and their anomalies."""
+    m = D['month']
+    def f(var, x, fmt):
+        z = heat_z(var, x, m)
+        return (fmt.format(x) + (f' ({z:+.1f}σ)' if np.isfinite(z) else '')).replace('nan', 'n/a')
+    return ('Heat (12Z-equivalent vs monthly climo): T925 ' + f('t925', D['T925'], '{:.1f} °C') + ' · thk 1000–850 ' +
+            f('thk1000_850', D['thick1000_850'], '{:.0f} m') + ' · 1000–500 ' + f('thk1000_500', D['thick1000_500'], '{:.0f} m') +
+            ' · θe850 ' + f('thetae850', D['Te850'], '{:.0f} K') + f" · 925 wind {D['spd925']:.0f} kt · 0–1 km dir {D['wdir_01']:.0f}°").replace('-', '−')
+
+def heat_sounding_for(obs, h, day):
+    """12Z-equivalent profile for `day`: the observed sounding if it is that 12Z, else obs + GFS change to 12Z."""
+    t12 = dt.datetime.combine(day, dt.time(HEAT_CLIMO_HOUR))
+    if obs.meta['valid'] == t12 or h is None:
+        return obs
+    try:
+        g0, gt = gfs_sounding_at(h, obs.meta['valid']), gfs_sounding_at(h, t12)
+        return calibrate_with_gfs(obs, g0, gt) if (g0 is not None and gt is not None) else obs
+    except Exception:
+        return obs
 
 # ---------------------------------------------------------------------------
 class Ledger:
@@ -998,7 +1309,7 @@ def _box_score(v, row):
     if v < d: return 0.5
     return -0.5
 
-def assess(D, g, season, gate=True, hc=None, env=None):
+def assess(D, g, season, gate=True, hc=None, env=None, Dh=None):
     L = Ledger()
     sc = D['sc']
     KI, CAPE, PWAT, T500 = D['KI'], D['CAPE'], D['PWAT'], D['T500']
@@ -1014,18 +1325,18 @@ def assess(D, g, season, gate=True, hc=None, env=None):
             L.add(h, s, f'{name} climo', f'{name} = {vals[name]:.1f} vs {HAZARD_LABEL[h]} boxplot {row}', src='climo')
 
     # ---- 2. Legacy rules (bug-fixed) ------------------------------------------------
-    hz3 = ('tornado', 'twind', 'hail')
+    hz3 = ('twind', 'hail')                 # convective-severe hazards (tornado removed)
     low_conv = (((KI < 20 or CAPE < 300) and (LR87 < sc['lr87'] or RH87 < 55))
                 or (PWAT < sc['pwat'] - 0.35 and KI < 20)           # FIX: was "(sc_pwat-0.35 and KI<20)", always truthy
                 or (LR87 < sc['lr87'] and PWAT < sc['pwat'] and W87 > 22)
                 or LR87 < sc['lr87_75'])
     if low_conv:
         if (KI > 20 or CAPE > 1000) and RH87 >= 60:
-            for h, d in zip(hz3, (-3, -2, -2)):
+            for h, d in zip(hz3, (-2, -2)):
                 L.add(h, d, 'Stable 850-700', 'Weak instability/stable 850–700 hPa, but moist: isolated storms may still cause localized flooding')
             L.remark('Isolated thunderstorms may lead to localized flooding.')
         else:
-            for h, d in zip(hz3, (-5, -4, -4)):
+            for h, d in zip(hz3, (-4, -4)):
                 L.add(h, d, 'Stable/dry', 'Low KI/CAPE with stable or dry 850–700 hPa layer')
             L.remark('Low risk of thunderstorms; any that develop will be isolated, brief and shallow.')
     elif W03 >= 20 and PWAT < sc['pwat'] and RH87 < 60 and T500 >= -7.0:
@@ -1037,7 +1348,6 @@ def assess(D, g, season, gate=True, hc=None, env=None):
     if ((KI < 20 or CAPE < 2000) and T500 > -7) or RH87 < 45 or (LR87 < sc['lr87'] and KI < 28):
         L.add('hail', -3, 'Hail unfavorable', 'Warm 500 hPa, low KI/CAPE, dry or stable 850–700 hPa')
         L.add('twind', -2, 'Hail-env penalty', 'Same unfavorable updraft environment')
-        L.add('tornado', -2, 'Hail-env penalty', 'Same unfavorable updraft environment')
     elif T500 <= -8.5 and dthe > 15 and (KI > 25 or CAPE > 1250):
         L.add('hail', 3, 'Cold 500 hPa', f'T500 {T500:.1f} °C ≤ −8.5 with θe deficit {dthe:.0f} K')
     elif T500 <= -7.0 and dthe > 18 and (KI >= 18 or CAPE > 1800):
@@ -1063,17 +1373,6 @@ def assess(D, g, season, gate=True, hc=None, env=None):
         L.add('twind', 1.5, 'Strong 0-3 km', 'Strong 0–3 km mean wind')
     elif dthe >= 20 and KI >= 25 and CAPE >= 1500 and LR03 > 5.5 and W87 > 20:
         L.add('twind', 2, 'θe deficit', f'1000–500 hPa θe deficit {dthe:.0f} K (downdraft potential)')
-
-    # Tornado  (FIX: 250 hPa speed, not direction, in the first test)
-    if (W03 < 7 and D['spd250'] < 19 and CAPE < 1500) or shear < 6 or LR87 < sc['lr87']:
-        L.add('tornado', -3, 'Low shear/stable', 'Weak speed shear or stable 850–700 hPa')
-    elif (shear >= 7 and D['dir1000'] > D['dir850'] and 90 <= WD03 <= 140 and 230 <= D['dir250'] <= 310
-          and LR03 >= 5.5 and LR01 > 6 and L.total('twind') >= 5):
-        L.add('tornado', 3, 'Speed+dir shear', 'Strong speed and directional shear with steep low-level lapse rates')
-    elif shear > 8 and L.total('twind') >= 6.5 and LR03 > 5 and D['dir1000'] > D['dir925'] > D['dir850'] > D['dir700']:
-        L.add('tornado', 2, 'Speed shear', 'High speed shear with backing profile')
-    elif shear < 6 and LR03 < 5.5:
-        L.add('tornado', -2.5, 'Weak shear', 'Weak shear and modest lapse rates')
 
     # Fair-weather waterspout
     if LR01 >= 6 and shear > 15 and D['MixR1000'] > 14:
@@ -1243,6 +1542,11 @@ def assess(D, g, season, gate=True, hc=None, env=None):
         elif lift == 'strong':
             for h_ in ('tstorm', 'flood'):
                 L.add(h_, 0.5, 'Upper support', f'Strong synoptic lift ({why})', src='lift')
+    # Extreme heat: anomaly of the low-level airmass vs monthly normals (after rain/cloud layers are known)
+    for d_, lab_, why_, src_ in heat_items(Dh or D, g, hc, env, max(L.total('tstorm'), L.total('flood'))):
+        L.add('heat', d_, lab_, why_, src_)
+    if D['month'] in HEAT_COOL_MONTHS and L.total('heat') > HEAT_COOL_CAP:
+        L.set_to('heat', HEAT_COOL_CAP, 'Cool-season cap', f'Dec–Mar: warm anomalies rarely reach heat-stress levels; capped at {10*HEAT_COOL_CAP:.0f} %', src='heat')
     # Severe hazards need storms: Table 4 says activity below GDI 5 is light showers
     if gdi < 5:
         for h in hz3:
@@ -1282,18 +1586,19 @@ def confidence(season):
           'LRS': ('Medium', 'Daily skill holds (R² 0.27) but tropical waves and cyclones can exceed GDI expectations.')}[season]
     rain = ('Low–Medium', f'Daily GDI explains only {100*R2_DAILY_RAIN[season]:.0f}% of island-mean rain; driven mostly by PWAT and steering flow.')
     emp = ('Empirical', 'Local TJSJ boxplot climatology and forecaster rules.')
-    return dict(tstorm=ts, flood=rain, hail=emp, twind=emp, tornado=emp, waterspout=emp, streamer=emp)
+    heat = ('Medium', 'Anomaly of the low-level airmass vs estimated monthly TJSJ normals; no heat-index target.')
+    return dict(tstorm=ts, flood=rain, hail=emp, twind=emp, heat=heat, waterspout=emp, streamer=emp)
 
 # ---------------------------------------------------------------------------
 # Legacy Risk Assessment (original TJSJ script): boxplot climatology + forecaster rules only,
 # legacy lapse-rate formulas and UWyo CAPE − CAPE_OFFSET. Four bugs fixed:
 #  1) "(sc_pwat − 0.35 and KI < 20)" was always true  -> PWAT < sc_pwat − 0.35 and KI < 20
-#  2) tornado test used the 250 hPa wind direction as a speed -> 250 hPa speed
+#  2) tornado test used the 250 hPa wind direction as a speed (tornado since replaced by Extreme Heat)
 #  3) wind directions were averaged arithmetically (350° & 10° -> 180°) -> vector mean
 #  4) 0–3 km lapse rate skipped the 925–850 hPa layer -> |T1000 − T700| / 3
 # ---------------------------------------------------------------------------
-LEGACY_HZ = ['flood', 'twind', 'hail', 'waterspout', 'tornado', 'streamer']     # skill order (no T-storm bar in legacy)
-LEGACY_LABEL = {'flood': 'Flooding\nrain', 'hail': 'Hail', 'twind': 'T-storm\nwind', 'tornado': 'Tornado',
+LEGACY_HZ = ['flood', 'twind', 'hail', 'heat', 'waterspout', 'streamer']     # skill order (no T-storm bar in legacy)
+LEGACY_LABEL = {'flood': 'Flooding\nrain', 'hail': 'Hail', 'twind': 'T-storm\nwind', 'heat': 'Extreme\nheat',
                 'waterspout': 'Fair-wx\nwaterspout', 'streamer': 'SJ\nstreamer'}
 
 def legacy_color(score):
@@ -1313,24 +1618,24 @@ def legacy_assess(snd):
     for name, rows in CLIMO.items():
         for h, row in zip(CLIMO_HZ, rows):
             S[h] += _box_score(vals[name], row)
-    # ALL: diminish hail, T-wind, tornado
+    # ALL: diminish hail and T-wind
     if (((KI < 20 or CAPE < 300) and (LR87 < sc['lr87'] or RH87 < 55)) or (PWAT < sc['pwat'] - 0.35 and KI < 20)
             or (LR87 < sc['lr87'] and PWAT < sc['pwat'] and W87 > 22) or LR87 < sc['lr87_75']):
         if (KI > 20 or CAPE > 1000) and RH87 >= 60:
-            S['tornado'] -= 3; S['twind'] -= 2; S['hail'] -= 2
+            S['twind'] -= 2; S['hail'] -= 2
             rem.append('Isolated thunderstorms may lead to localized flooding')
         else:
-            S['tornado'] -= 5; S['twind'] -= 4; S['hail'] -= 4
+            S['twind'] -= 4; S['hail'] -= 4
             rem.append('Low risk of thunderstorms; any will be isolated, brief and shallow')
     elif W03 >= 20 and PWAT < sc['pwat'] and RH87 < 60 and T500 >= -7.0:
-        for h in ('flood', 'tornado', 'twind', 'hail'): S[h] -= 3
-        rem.append('−30% (tornado, hail, T-wind): strong 0–3 km winds limit sea-breeze formation')
+        for h in ('flood', 'twind', 'hail'): S[h] -= 3
+        rem.append('−30% (hail, T-wind): strong 0–3 km winds limit sea-breeze formation')
     elif RH53 >= 70 and (KI < 18 or CAPE < 1500) and PWAT < sc['pwat']:
-        for h in ('tornado', 'hail', 'twind'): S[h] -= 3
-        rem.append('−30% (tornado, hail, T-wind): dense high cloud cover')
+        for h in ('hail', 'twind'): S[h] -= 3
+        rem.append('−30% (hail, T-wind): dense high cloud cover')
     # Hail
     if ((KI < 20 or CAPE < 2000) and T500 > -7) or RH87 < 45 or (LR87 < sc['lr87'] and KI < 28):
-        S['hail'] -= 3; S['twind'] -= 2; S['tornado'] -= 2
+        S['hail'] -= 3; S['twind'] -= 2
         rem.append('−30% (hail): warm 500 hPa, low KI/CAPE, or dry/stable 850–700 hPa')
     elif T500 <= -8.5 and dthe > 15 and (KI > 25 or CAPE > 1250):
         S['hail'] += 3; rem.append('+30% (hail): very cold 500 hPa (≤ −8.5 °C)')
@@ -1355,16 +1660,6 @@ def legacy_assess(snd):
         S['twind'] += 1.5; rem.append('+15% (T-wind): strong 0–3 km mean wind')
     elif dthe >= 20 and KI >= 25 and CAPE >= 1500 and LR03 > 5.5 and W87 > 20:
         S['twind'] += 2; rem.append('+20% (T-wind): large θe deficit')
-    # Tornado (fix 2)
-    if (W03 < 7 and D['spd250'] < 19 and CAPE < 1500) or shear < 6 or LR87 < sc['lr87']:
-        S['tornado'] -= 3
-    elif (shear >= 7 and D['dir1000'] > D['dir850'] and 90 <= WD03 <= 140 and 230 <= D['dir250'] <= 310
-          and LR03 >= 5.5 and LR01 > 6 and S['twind'] >= 5):
-        S['tornado'] += 3; rem.append('+30% (tornado): speed and directional shear')
-    elif shear > 8 and S['twind'] >= 6.5 and LR03 > 5 and D['dir1000'] > D['dir925'] > D['dir850'] > D['dir700']:
-        S['tornado'] += 2; rem.append('+20% (tornado): high speed shear')
-    elif shear < 6 and LR03 < 5.5:
-        S['tornado'] -= 2.5
     # Fair-weather waterspout
     if LR01 >= 6 and shear > 15 and D['MixR1000'] > 14:
         if S['waterspout'] < 5.5:
@@ -1408,15 +1703,19 @@ def legacy_assess(snd):
         if LR87 >= sc['lr87'] - 0.2 and CAPE > 400 and PWAT >= sc['pwat'] - 0.2: S['streamer'] += 4
         if 7 <= D['MixR850'] <= 14 and 5 <= D['MixR700'] <= 7 and CAPE > 1500: S['streamer'] += 1.5
         if 330 <= D['Te850'] <= 342 and 325 <= D['Te700'] <= 334 and CAPE > 350: S['streamer'] += 1.5
+    # Extreme heat (same anomaly rules as the new engine; sounding only, legacy flood score as the rain check)
+    S['heat'] = sum(d_ for d_, *_ in heat_items(D, None, None, None, S['flood']))
+    if m in HEAT_COOL_MONTHS: S['heat'] = min(S['heat'], HEAT_COOL_CAP)
     S = {h: round10(10 * max(v, 0.0)) / 10 for h, v in S.items()}       # nearest 10 %
     return dict(scores=S, remarks=rem, gust=D['gust'], D=D)
 
-def run_engine(snd, hc=None, env=None):
+def run_engine(snd, hc=None, env=None, heat_snd=None):
     season = season_of(snd.meta['valid'].month)
     D = diagnostics(snd, LAPSE_RATE_MODE, CAPE_OFFSET)
+    Dh = diagnostics(heat_snd, LAPSE_RATE_MODE, CAPE_OFFSET) if (heat_snd is not None and heat_snd is not snd) else D
     g = gdi_from_sounding(snd, APPLY_TERRAIN_CORRECTION)
-    res = assess(D, g, season, GDI_GATE_SEVERE, hc, env)
-    return dict(snd=snd, D=D, g=g, res=res, season=season, hc=hc or {}, env=env or {}, legacy=legacy_assess(snd))
+    res = assess(D, g, season, GDI_GATE_SEVERE, hc, env, Dh)
+    return dict(snd=snd, D=D, Dh=Dh, g=g, res=res, season=season, hc=hc or {}, env=env or {}, legacy=legacy_assess(snd))
 
 # Overview graphic (1600×1000, dark)
 import os, textwrap
@@ -1431,10 +1730,10 @@ plt.rcParams.update({'font.family': 'DejaVu Sans', 'text.color': INK_, 'axes.lab
                      'xtick.color': INK2_, 'ytick.color': INK2_, 'axes.edgecolor': LINE_})
 
 PUBLIC_HAZARD = {'flood': 'Flooding rain', 'tstorm': 'Thunderstorms & lightning','hail': 'Hail',
-                 'twind': 'Thunderstorm winds', 'waterspout': 'Waterspouts', 'tornado': 'Tornado',
+                 'twind': 'Thunderstorm winds', 'waterspout': 'Waterspouts', 'heat': 'Extreme heat',
                  'streamer': 'San Juan streamer showers'}
 SHORT_HAZARD = {'flood': 'Flooding rain', 'tstorm': 'T-storms-Lightning', 'hail': 'Hail', 'twind': 'T-storm winds',
-                 'waterspout': 'Waterspouts', 'tornado': 'Tornado', 'streamer': 'SJ streamer'}
+                 'waterspout': 'Waterspouts', 'heat': 'Extreme heat', 'streamer': 'SJ streamer'}
 PUBLIC_REGIME = [  # Gálvez & Davison Table 4, in plain words
     (-np.inf, 5, 'Mostly stable', 'Only brief, light showers expected.'),
     (5, 15,      'Passing showers', "Showers at times; a brief thunderstorm can't be ruled out."),
@@ -1526,6 +1825,7 @@ def _tech_notes(R, inv, runs=None, gfs_note=None):
     lines.append(('•', (f"Ingredients: WCD {X['WCD']:.1f} km · RH 850–500 {X['RH85']:.0f}% · Corfidi up {X['CORFIDI_UP']:.0f} kt · "
                         f"MLCAPE {X['MLCAPE']:.0f} · CAPE −10/−30 °C {X['CAPE_LTG']:.0f} · CAPE 0–3 km {X['CAPE03']:.0f} · DCAPE {X['DCAPE']:.0f} · "
                         f"shear 0–6 km {X['SHEAR06']:.0f} kt · WBZ {X['WBZ_Z']/1000:.1f} km · sfc wind {sw:.0f} kt").replace('nan', 'n/a')))
+    lines.append(('•', heat_note(R.get('Dh', X))))
     if env.get('lift'):
         lines.append(('•', (f"Lift (GFS 8 a.m.–2 p.m.): {env['lift']} ×{env['mult']:.2f} — 200 hPa divergence {env['div200']*1e5:+.1f}, "
                             f"700 hPa vorticity {env['vort700']*1e5:+.1f}, 200 hPa vorticity {env['vort200']*1e5:+.1f} (×10⁻⁵ s⁻¹).").replace('-', '−')))
@@ -1590,7 +1890,7 @@ def _today_legacy(fig, R, pm, rect):
         ax.text(-1.25, lo + 1, nm, fontsize=8.5, color=MUTED_, ha='left', va='bottom')
     ax.set_ylim(0, 112); ax.set_xlim(-1.3, len(order) - 0.4); ax.set_yticks([])
     TL = {'flood': 'Flooding\nrain', 'tstorm': 'T-storms &\nlightning', 'twind': 'T-storm\nwinds', 'hail': 'Hail',
-          'waterspout': 'Waterspouts', 'tornado': 'Tornado', 'streamer': 'SJ\nstreamer'}
+          'waterspout': 'Waterspouts', 'heat': 'Extreme\nheat', 'streamer': 'SJ\nstreamer'}
     ax.set_xticks(range(len(order))); ax.set_xticklabels([f"{SKILL_DOTS[SKILL_TIER[h]]}\n{TL[h]}" for h in order], fontsize=10, color=INK_)
     for t_, h in zip(ax.get_xticklabels(), order):
         if low_skill(h): t_.set_color(INK2_)
@@ -1924,7 +2224,7 @@ if H_GFS is not None:
 
 HC_NOW = high_cloud_for(SND, H_GFS, use_sounding=True)
 ENV_NOW = gfs_env_for(SND, H_GFS, STENCIL)
-R = run_engine(SND, HC_NOW, ENV_NOW)
+R = run_engine(SND, HC_NOW, ENV_NOW, heat_sounding_for(SND, H_GFS, SND.meta['valid'].date()))
 print(f"TJSJ {SND.meta['valid']:%Y-%m-%d %HZ} | GDI {R['g']['GDI']:.1f} | source: {SND.meta['url']}")
 print(f"  High cloud now: {HC_NOW['pct']:.0f}% ({HC_NOW['src']}; GFS {HC_NOW['gfs']:.0f}%, sounding est. {HC_NOW['snd']:.0f}%)".replace('nan%', 'n/a'))
 print(f"  Lift now: {ENV_NOW['lift'] or 'n/a'} (×{ENV_NOW['mult']:.2f}) | 200 hPa div {ENV_NOW['div200']:.2e} | 700 hPa vort {ENV_NOW['vort700']:.2e} | 10 m wind {ENV_NOW['sfc_wind']:.0f} kt")
@@ -1935,7 +2235,8 @@ GFS_RUNS = []
 if H_GFS is not None:
     try:
         for s in calibrated_outlook(SND, H_GFS, days=3):
-            GFS_RUNS.append(run_engine(s, high_cloud_for(s, H_GFS, use_sounding=False), gfs_env_for(s, H_GFS, STENCIL)))
+            GFS_RUNS.append(run_engine(s, high_cloud_for(s, H_GFS, use_sounding=False), gfs_env_for(s, H_GFS, STENCIL),
+                                      heat_sounding_for(SND, H_GFS, s.meta['valid'].date())))
         for r in GFS_RUNS:
             print(f"  {r['snd'].meta['valid']:%a %d %HZ}: calibrated GDI {r['g']['GDI']:.1f} | high cloud {r['hc']['pct']:.0f}% | lift {r['env']['lift'] or 'n/a'}")
     except Exception as e:
@@ -1945,7 +2246,6 @@ if not GFS_RUNS and GFS_NOTE is None:
     GFS_NOTE = 'No GFS afternoons available for this date: sounding only.'
 if GFS_NOTE:
     print('ℹ️', GFS_NOTE)
-
 
 os.makedirs(OUT_DIR, exist_ok=True)
 # IMAGE = make_overview(R, INV, GFS_RUNS, f"{OUT_DIR}/tjsj_{R['snd'].meta['valid']:%Y%m%d%H}_overview.png", GFS_NOTE)
