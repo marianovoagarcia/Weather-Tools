@@ -76,19 +76,19 @@ HS_CLASSES = [
 
 # Beaufort Scale: (upper_bound_kt, force_num, label, kt_range, color)
 BEAUFORT_CLASSES = [
-    (1.0,    0,  "Calm",          "<1 kt",     "#94a3b8"),
-    (4.0,    1,  "Light air",     "1–3 kt",    "#60a5fa"),
-    (7.0,    2,  "Light breeze",  "4–6 kt",    "#38bdf8"),
-    (11.0,   3,  "Gentle breeze", "7–10 kt",   "#2dd4bf"),
-    (17.0,   4,  "Mod. breeze",   "11–16 kt",  "#22c55e"),
-    (22.0,   5,  "Fresh breeze",  "17–21 kt",  "#84cc16"),
-    (28.0,   6,  "Strong breeze", "22–27 kt",  "#eab308"),
-    (34.0,   7,  "Near gale",     "28–33 kt",  "#f59e0b"),
-    (41.0,   8,  "Gale",          "34–40 kt",  "#f97316"),
-    (48.0,   9,  "Strong gale",   "41–47 kt",  "#ef4444"),
-    (56.0,   10, "Storm",         "48–55 kt",  "#dc2626"),
-    (64.0,   11, "Violent storm", "56–63 kt",  "#b91c1c"),
-    (np.inf, 12, "Hurricane",     "≥64 kt",    "#9333ea"),
+    (1.0,    0,  "Calm",          "<1 kt",     "#94a3b8"),  # Cool Slate Gray
+    (4.0,    1,  "Light air",     "1–3 kt",    "#7dd3fc"),  # Pale Sky Blue
+    (7.0,    2,  "Light breeze",  "4–6 kt",    "#2563eb"),  # Royal Blue
+    (11.0,   3,  "Gentle breeze", "7–10 kt",   "#0d9488"),  # Deep Teal
+    (17.0,   4,  "Mod. breeze",   "11–16 kt",  "#16a34a"),  # Vivid Emerald Green
+    (22.0,   5,  "Fresh breeze",  "17–21 kt",  "#eab308"),  # Bright Gold / Yellow
+    (28.0,   6,  "Strong breeze", "22–27 kt",  "#f97316"),  # Vivid Orange
+    (34.0,   7,  "Near gale",     "28–33 kt",  "#dc2626"),  # Crimson Red
+    (41.0,   8,  "Gale",          "34–40 kt",  "#991b1b"),  # Dark Maroon
+    (48.0,   9,  "Strong gale",   "41–47 kt",  "#db2777"),  # Hot Magenta / Pink
+    (56.0,   10, "Storm",         "48–55 kt",  "#7e22ce"),  # Deep Purple
+    (64.0,   11, "Violent storm", "56–63 kt",  "#4338ca"),  # Dark Indigo
+    (np.inf, 12, "Hurricane",     "≥64 kt",    "#111827"),  # Near-Black Charcoal
 ]
 
 PARAMS = {
