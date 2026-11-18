@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from matplotlib.patches import Patch
+from matplotlib.patches import Patch, FancyBboxPatch
 from matplotlib.lines import Line2D
 
 # ======================================================================
@@ -20,7 +20,7 @@ from matplotlib.lines import Line2D
 # ======================================================================
 PLOT_DEFAULT_BUOYS = True
 PLOT_POINT_FORECAST = True
-SHOW_WIND_DIRECTION = False
+SHOW_WIND_DIRECTION = True
 LABEL_EVERY_H = 6
 SHOW_GFS_WAVE = True
 SHOW_ECMWF_WAVE = True
@@ -42,6 +42,7 @@ OUT_DIR = "web_images"
 # Constants
 # ----------------------------------------------------------------------
 M2FT = 3.28084
+MS2KT = 1.94384
 RHO, G = 1025.0, 9.81
 TE_OVER_TP = 0.9
 LOCAL_UTC_OFFSET = -4
@@ -73,11 +74,31 @@ HS_CLASSES = [
     (np.inf, "High (≥7 ft)",        "#e02424"),
 ]
 
+# Beaufort Scale: (upper_bound_kt, force_num, label, kt_range, color)
+BEAUFORT_CLASSES = [
+    (1.0,    0,  "Calm",          "<1 kt",     "#94a3b8"),
+    (4.0,    1,  "Light air",     "1–3 kt",    "#60a5fa"),
+    (7.0,    2,  "Light breeze",  "4–6 kt",    "#38bdf8"),
+    (11.0,   3,  "Gentle breeze", "7–10 kt",   "#2dd4bf"),
+    (17.0,   4,  "Mod. breeze",   "11–16 kt",  "#22c55e"),
+    (22.0,   5,  "Fresh breeze",  "17–21 kt",  "#84cc16"),
+    (28.0,   6,  "Strong breeze", "22–27 kt",  "#eab308"),
+    (34.0,   7,  "Near gale",     "28–33 kt",  "#f59e0b"),
+    (41.0,   8,  "Gale",          "34–40 kt",  "#f97316"),
+    (48.0,   9,  "Strong gale",   "41–47 kt",  "#ef4444"),
+    (56.0,   10, "Storm",         "48–55 kt",  "#dc2626"),
+    (64.0,   11, "Violent storm", "56–63 kt",  "#b91c1c"),
+    (np.inf, 12, "Hurricane",     "≥64 kt",    "#9333ea"),
+]
+
 PARAMS = {
     (10, 0, 3):  "HTSGW",
     (10, 0, 10): "DIRPW",
     (10, 0, 11): "PERPW",
     (0, 2, 0):   "WDIR",
+    (0, 2, 1):   "WIND",
+    (0, 2, 2):   "UGRD",
+    (0, 2, 3):   "VGRD",
 }
 
 PART_PARAMS = {
@@ -101,12 +122,20 @@ def compass(deg):
         return ""
     return COMPASS16[int((deg % 360) / 22.5 + 0.5) % 16]
 
+def _beaufort_index(kt):
+    if not np.isfinite(kt):
+        return -1
+    for idx, (ub, _, _, _, _) in enumerate(BEAUFORT_CLASSES):
+        if kt < ub:
+            return idx
+    return len(BEAUFORT_CLASSES) - 1
+
 # ----------------------------------------------------------------------
 # 1. Download (NWPS from NOMADS, GFS-Wave fallback)
 # ----------------------------------------------------------------------
 FILTER = "https://nomads.ncep.noaa.gov/cgi-bin/filter_srnwps.pl"
 PUB = "https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwps/prod"
-NWPS_VARS = ("DIRPW", "HTSGW", "PERPW", "WDIR")
+NWPS_VARS = ("DIRPW", "HTSGW", "PERPW", "WDIR", "WIND", "UGRD", "VGRD")
 BOX = (19.5, -68.0, -64.0, 17.0)
 
 NWPS_PRODUCTS = {
@@ -286,7 +315,7 @@ def download_gfswave_nomads(cache_dir=".", force=False, max_days=2, every_h=3,
                          "all_lev": "on", "subregion": "", "toplat": top,
                          "leftlon": left, "rightlon": right, "bottomlat": bottom,
                          "var_HTSGW": "on", "var_PERPW": "on", "var_DIRPW": "on",
-                         "var_WDIR": "on"}
+                         "var_WDIR": "on", "var_WIND": "on"}
                     try:
                         r = sess.get(GFS_FILTER, params=q, timeout=(10, 60))
                         if r.ok and r.content[:4] == b"GRIB":
@@ -462,8 +491,23 @@ def _combine(raw):
     wd_keys = [k for k in raw if k[0] == "WDIR"]
     wdir = series(wd_keys[0]) if wd_keys else np.full(T, np.nan)
 
+    ws_keys = [k for k in raw if k[0] == "WIND"]
+    u_keys = [k for k in raw if k[0] == "UGRD"]
+    v_keys = [k for k in raw if k[0] == "VGRD"]
+    if ws_keys:
+        wspd_kt = series(ws_keys[0]) * MS2KT
+    elif u_keys and v_keys:
+        u = series(u_keys[0])
+        v = series(v_keys[0])
+        wspd_kt = np.hypot(u, v) * MS2KT
+        if not np.isfinite(wdir).any():
+            wdir = (np.degrees(np.arctan2(-u, -v)) % 360.0)
+    else:
+        wspd_kt = np.full(T, np.nan)
+
     return dict(time=np.array(times), hs_m=hs, tp_s=tp, dir_deg=dr,
-                wdir_deg=wdir, power_kw=power, energy_kj=_energy(hs, tp),
+                wdir_deg=wdir, wspd_kt=wspd_kt, power_kw=power,
+                energy_kj=_energy(hs, tp),
                 partitions=partitions if len(partitions) > 1 else [])
 
 def _energy(hs_m, tp_s):
@@ -476,9 +520,10 @@ def _power(hs_m, tp_s):
     return RHO * (G ** 2) * (hs_m ** 2) * te / (64.0 * np.pi) / 1000.0
 
 # ----------------------------------------------------------------------
-# 2b. Other wave models for comparison (Open-Meteo marine API)
+# 2b. Other wave models & winds for comparison (Open-Meteo API)
 # ----------------------------------------------------------------------
 OPEN_METEO_URL = "https://marine-api.open-meteo.com/v1/marine"
+OPEN_METEO_WX_URL = "https://api.open-meteo.com/v1/forecast"
 COMPARE_MODELS = {
     "GFS-Wave":  (["ncep_gfswave025", "ncep_gfswave016", "gfs_wave025"], "o", "#2563eb"),
     "ECMWF WAM": (["ecmwf_wam025", "ecmwf_wam"],                       "D", "#7c3aed"),
@@ -487,11 +532,13 @@ COMPARE_MODELS = {
 class _ServiceDown(Exception):
     pass
 
-def _om_fetch(lats, lons, model_id, variables=("wave_height",), retries=1):
+def _om_fetch(lats, lons, model_id, variables=("wave_height",), retries=1, base_url=OPEN_METEO_URL):
     base = dict(latitude=",".join(f"{v:.4f}" for v in lats),
                 longitude=",".join(f"{v:.4f}" for v in lons),
-                hourly=",".join(variables), models=model_id, timezone="GMT",
+                hourly=",".join(variables), timezone="GMT",
                 timeformat="iso8601")
+    if model_id:
+        base["models"] = model_id
     variants = [dict(base, past_days=2, forecast_days=8, cell_selection="sea"),
                 dict(base, past_days=2, forecast_days=7),
                 dict(base, forecast_days=7)]
@@ -499,7 +546,7 @@ def _om_fetch(lats, lons, model_id, variables=("wave_height",), retries=1):
     for params in variants:
         for attempt in range(retries + 1):
             try:
-                r = requests.get(OPEN_METEO_URL, params=params, timeout=(6, 30))
+                r = requests.get(base_url, params=params, timeout=(6, 30))
             except (requests.ConnectionError, requests.Timeout) as e:
                 raise _ServiceDown(f"cannot reach Open-Meteo ({e.__class__.__name__})")
             except requests.RequestException as e:
@@ -554,6 +601,28 @@ def _om_request(lats, lons, model_id, retries=1):
     res = _om_fetch(lats, lons, model_id, ("wave_height",), retries)
     return [{t: v for t, v in zip(r["time"], r["wave_height"]) if np.isfinite(v)} for r in res]
 
+def enrich_winds_openmeteo(data, points):
+    """Fill missing wind speed or direction from Open-Meteo 10m wind (knots)."""
+    need = [p for p in points if not (np.isfinite(data[p[0]]["wspd_kt"]).any()
+                                      and np.isfinite(data[p[0]]["wdir_deg"]).any())]
+    if not need:
+        return
+    lats = [p[1] for p in need]
+    lons = [p[2] - 360 if p[2] > 180 else p[2] for p in need]
+    try:
+        res = _om_fetch(lats, lons, None, ("wind_speed_10m", "wind_direction_10m"),
+                        base_url=OPEN_METEO_WX_URL)
+        for (nm, _, _), r in zip(need, res):
+            ws_map = {t: v * MS2KT for t, v in zip(r["time"], r["wind_speed_10m"]) if np.isfinite(v)}
+            wd_map = {t: v for t, v in zip(r["time"], r["wind_direction_10m"]) if np.isfinite(v)}
+            times = data[nm]["time"]
+            if not np.isfinite(data[nm]["wspd_kt"]).any():
+                data[nm]["wspd_kt"] = np.array([ws_map.get(t, np.nan) for t in times], float)
+            if not np.isfinite(data[nm]["wdir_deg"]).any():
+                data[nm]["wdir_deg"] = np.array([wd_map.get(t, np.nan) for t in times], float)
+    except Exception as e:
+        print(f"⚠ Could not fetch fallback wind speed/direction ({str(e)[:120]})")
+
 def gfs_points_openmeteo(points):
     lats = [p[1] for p in points]
     lons = [p[2] - 360 if p[2] > 180 else p[2] for p in points]
@@ -588,9 +657,11 @@ def gfs_points_openmeteo(points):
         glat = float(r["lat"]) if r["lat"] is not None else la
         glon = float(r["lon"]) if r["lon"] is not None else lo
         dist = 111.2 * np.hypot(glat - la, (glon - lo) * np.cos(np.radians(la)))
+        n_keep = int(keep.sum())
         data[nm] = dict(time=r["time"][keep], hs_m=hs, tp_s=tp,
                         dir_deg=r["wave_direction"][keep],
-                        wdir_deg=np.full(int(keep.sum()), np.nan),
+                        wdir_deg=np.full(n_keep, np.nan),
+                        wspd_kt=np.full(n_keep, np.nan),
                         power_kw=_power(hs, tp), energy_kj=_energy(hs, tp), partitions=[],
                         req_lat=la, req_lon=lo, grid_lat=glat, grid_lon=glon,
                         dist_km=float(dist))
@@ -661,7 +732,7 @@ def add_model_comparison(data, points, use_gfs=True, use_ecmwf=True):
     return loaded
 
 # ----------------------------------------------------------------------
-# 3. Plotting — "forecast strip" style
+# 3. Plotting — "forecast strip" style + Beaufort wind arrows & side legend
 # ----------------------------------------------------------------------
 plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 9})
 INK, MUTED, FAINT = "#1f2937", "#6b7280", "#9ca3af"
@@ -743,7 +814,7 @@ def _tick_times(tl, every_h=3):
     return out
 
 def _strip(fig, top_in, W, s, title, ymax_ft, bars_h, show_wind, show_axis=True,
-           L_in=0.75, R_in=0.35):
+           L_in=0.75, R_in=1.85):
     H = fig.get_figheight()
     L, R = L_in / W, 1.0 - (R_in / W)
     tl = _local(s["time"])
@@ -754,7 +825,7 @@ def _strip(fig, top_in, W, s, title, ymax_ft, bars_h, show_wind, show_axis=True,
     step = _step_days(tl)
     xlim = (xs[0] - step * 0.6, xs[-1] + step * 0.6)
 
-    TITLE_H, INFO_H, WIND_H, E_H, AX_H = 0.42, 0.78, (0.28 if show_wind else 0), 0.42, (0.3 if show_axis else 0.05)
+    TITLE_H, INFO_H, WIND_H, E_H, AX_H = 0.42, 0.78, (0.36 if show_wind else 0), 0.42, (0.3 if show_axis else 0.05)
     y = top_in - TITLE_H
 
     axb = fig.add_axes([L, (y - bars_h) / H, R - L, bars_h / H])
@@ -832,18 +903,31 @@ def _strip(fig, top_in, W, s, title, ymax_ft, bars_h, show_wind, show_axis=True,
     if show_wind:
         axw = fig.add_axes([L, (y - WIND_H) / H, R - L, WIND_H / H], sharex=axb)
         y -= WIND_H
-        _clean(axw); axw.set_ylim(0, 1)
+        _shade_nights(axw, tl)
+        _clean(axw)
+        axw.set_ylim(0, 1)
         wd = np.asarray(s["wdir_deg"], float)
+        ws = np.asarray(s.get("wspd_kt", np.full(len(wd), np.nan)), float)
         okw = idx[np.isfinite(wd[idx])]
         thw = np.radians(wd[okw] + 180.0)
         if len(okw):
-            axw.quiver(xs[okw], np.full(len(okw), 0.5), np.sin(thw), np.cos(thw), angles="uv",
-                       pivot="middle", color=FAINT, scale=75, width=0.0026, zorder=5)
+            arrow_colors = []
+            for k in okw:
+                b_idx = _beaufort_index(ws[k])
+                arrow_colors.append(BEAUFORT_CLASSES[b_idx][4] if b_idx >= 0 else MUTED)
+            axw.quiver(xs[okw], np.full(len(okw), 0.58), np.sin(thw), np.cos(thw),
+                       angles="uv", pivot="middle", color=arrow_colors,
+                       scale=72, width=0.0030, headwidth=4.2, headlength=4.2,
+                       headaxislength=3.8, zorder=5)
+            for k in okw:
+                if np.isfinite(ws[k]):
+                    axw.text(xs[k], 0.14, f"{ws[k]:.0f}kt", ha="center", va="center",
+                             fontsize=6.5, color=MUTED, zorder=5)
         else:
             axw.text(xs[len(xs) // 2], 0.5, "wind direction not available from this source",
                      ha="center", va="center", fontsize=7, color=FAINT)
-        axw.text(xs[0] - step * 0.6, 0.5, "wind ", ha="right", va="center",
-                 fontsize=7, color=FAINT)
+        axw.text(xs[0] - step * 0.6, 0.5, "Wind ", ha="right", va="center",
+                 fontsize=7.5, color=MUTED, fontweight="bold")
 
     axe = fig.add_axes([L, (y - E_H) / H, R - L, E_H / H], sharex=axb)
     y -= E_H
@@ -877,26 +961,73 @@ def _strip(fig, top_in, W, s, title, ymax_ft, bars_h, show_wind, show_axis=True,
     axb.set_xlim(*xlim)
     return y
 
-def _legend(fig, y_in, show_wind, models=()):
+def _beaufort_side_legend(fig, W, H, top_in, bottom_in, R_in=1.85):
+    """Draw the Beaufort Wind Scale legend in the right margin."""
+    x0 = 1.0 - (R_in - 0.18) / W
+    w = (R_in - 0.30) / W
+    y0 = bottom_in / H
+    h = (top_in - bottom_in) / H
+    if h <= 0.05:
+        return
+
+    ax = fig.add_axes([x0, y0, w, h])
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+    ax.add_patch(FancyBboxPatch(
+        (0.01, 0.005), 0.98, 0.99,
+        boxstyle="round,pad=0,rounding_size=0.03",
+        fc="#f8fafc", ec="#e2e8f0", lw=1.0,
+        mutation_aspect=w / h
+    ))
+
+    ax.text(0.5, 0.965, "BEAUFORT SCALE", ha="center", va="top",
+            fontsize=8.0, fontweight="bold", color=INK)
+    ax.text(0.5, 0.935, "(Wind Arrows)", ha="center", va="top",
+            fontsize=6.8, color=MUTED)
+
+    n = len(BEAUFORT_CLASSES)
+    y_top = 0.895
+    y_bot = 0.025
+    row_h = (y_top - y_bot) / n
+
+    for i, (_, force, label, kt_rng, color) in enumerate(BEAUFORT_CLASSES):
+        yc = y_top - (i + 0.5) * row_h
+        # Color swatch
+        ax.add_patch(FancyBboxPatch(
+            (0.06, yc - row_h * 0.32), 0.12, row_h * 0.64,
+            boxstyle="round,pad=0,rounding_size=0.015",
+            fc=color, ec="none"
+        ))
+        # Force badge + description
+        ax.text(0.22, yc + row_h * 0.12, f"F{force} · {label}",
+                ha="left", va="center", fontsize=6.7, fontweight="bold", color=INK)
+        ax.text(0.22, yc - row_h * 0.20, kt_rng,
+                ha="left", va="center", fontsize=6.1, color=MUTED)
+
+def _legend(fig, y_in, show_wind, models=(), R_in=1.85):
     H = fig.get_figheight()
+    W = fig.get_figwidth()
+    cx = (0.75 / W + (1.0 - R_in / W)) / 2.0
     if models:
         mh = [Line2D([], [], color="none", marker=COMPARE_MODELS[m][1],
                      mfc=COMPARE_MODELS[m][2], mec="white", ms=7, label=f"{m} wave height") for m in models]
-        fig.legend(handles=mh, loc="lower center", bbox_to_anchor=(0.5, (y_in + 0.66) / H),
+        fig.legend(handles=mh, loc="lower center", bbox_to_anchor=(cx, (y_in + 0.66) / H),
                    ncol=len(mh), fontsize=8.5, frameon=False, handlelength=1.4,
                    columnspacing=1.6, labelcolor="black")
     h = [Patch(color=c, alpha=0.85, label=f"Height: {l}") for _, l, c in HS_CLASSES]
     h += [Line2D([], [], color=INK, marker=r"$\searrow$", ls="none", ms=11,
-                 label="Wave travel direction · height (bold) · period")]
+                 label="Wave direction · height · period")]
     if show_wind:
-        h += [Line2D([], [], color=FAINT, marker=r"$\searrow$", ls="none", ms=10,
-                     label="Wind blowing toward")]
-    fig.legend(handles=h, loc="lower center", bbox_to_anchor=(0.5, (y_in + 0.33) / H),
-               ncol=len(h), fontsize=8.5, frameon=False, handlelength=1.4, columnspacing=1.4,
+        h += [Line2D([], [], color="#22c55e", marker=r"$\searrow$", ls="none", ms=10,
+                     label="Wind direction (Beaufort scale →)")]
+    fig.legend(handles=h, loc="lower center", bbox_to_anchor=(cx, (y_in + 0.33) / H),
+               ncol=len(h), fontsize=8.2, frameon=False, handlelength=1.4, columnspacing=1.2,
                labelcolor="black")
     e = [Line2D([], [], color=c, lw=5, solid_capstyle="round", label=l)
          for _, l, c in E_CLASSES]
-    fig.legend(handles=e, loc="lower center", bbox_to_anchor=(0.5, y_in / H),
+    fig.legend(handles=e, loc="lower center", bbox_to_anchor=(cx, y_in / H),
                ncol=len(e), fontsize=8.5, frameon=False, handlelength=1.8,
                labelcolor="black")
 
@@ -924,7 +1055,7 @@ def _common_ymax(series_list):
     return float(np.ceil((m + 1.5) / 5.0) * 5.0)
 
 def _strip_height(bars_h, show_wind, show_axis=True):
-    return 0.42 + bars_h + 0.78 + (0.28 if show_wind else 0) + 0.42 + (0.3 if show_axis else 0.05)
+    return 0.42 + bars_h + 0.78 + (0.36 if show_wind else 0) + 0.42 + (0.3 if show_axis else 0.05)
 
 # ----------------------------------------------------------------------
 # 4. The two figures
@@ -937,51 +1068,59 @@ def _models_in(series):
                 found.append(m)
     return [m for m in COMPARE_MODELS if m in found]
 
-def _titles(fig, H, what, source):
+def _titles(fig, H, what, source, R_in=1.85):
     source = source or {}
+    W = fig.get_figwidth()
+    cx = (0.75 / W + (1.0 - R_in / W)) / 2.0
     main = source.get("main", "NWPS")
-    fig.text(0.5, 1.0 - 0.18 / H, f"{main} {what}", ha="center", va="top",
+    fig.text(cx, 1.0 - 0.18 / H, f"{main} {what}", ha="center", va="top",
              fontsize=16, fontweight="bold", color=INK)
     if source.get("fallback"):
-        fig.text(0.5, 1.0 - 0.5 / H, f"⚠ NWPS not available — showing {source.get('label', 'GFS-Wave')}"
+        fig.text(cx, 1.0 - 0.5 / H, f"⚠ NWPS not available — showing {source.get('label', 'GFS-Wave')}"
                  " · wave height (bars) · direction · period · wave energy",
                  ha="center", va="top", fontsize=9.5, color="#b45309", fontweight="bold")
     else:
-        fig.text(0.5, 1.0 - 0.5 / H, "Wave height (bars) · direction · period · wave energy",
+        fig.text(cx, 1.0 - 0.5 / H, "Wave height (bars) · direction · period · wave energy",
                  ha="center", va="top", fontsize=9.5, color=MUTED)
 
 def plot_default_buoys(data, run_label, out="web_images/nwps_virtual_buoys.png",
-                       show_wind=False, dpi=150, source=None):
+                       show_wind=True, dpi=150, source=None):
     names = [b[0] for b in DEFAULT_BUOYS]
     series = [data[n] for n in names]
     ymax = _common_ymax(series)
     models = _models_in(series)
-    W, TOP, GAP, BOTTOM, BARS = 15.0, 0.75, 0.3, (1.33 if models else 1.0), 1.55
+    R_in = 1.85 if show_wind else 0.35
+    W, TOP, GAP, BOTTOM, BARS = 16.2, 0.75, 0.3, (1.33 if models else 1.0), 1.55
     sh = _strip_height(BARS, show_wind)
     H = TOP + len(names) * sh + (len(names) - 1) * GAP + BOTTOM
     fig = plt.figure(figsize=(W, H), facecolor="white")
-    _titles(fig, H, "Virtual Wave Buoys — Puerto Rico & U.S. Virgin Islands", source)
+    _titles(fig, H, "Virtual Wave Buoys — Puerto Rico & U.S. Virgin Islands", source, R_in=R_in)
     y = H - TOP
     for n in names:
-        y = _strip(fig, y, W, data[n], n, ymax, BARS, show_wind) - GAP
-    _legend(fig, 0.25, show_wind, models)
+        y = _strip(fig, y, W, data[n], n, ymax, BARS, show_wind, R_in=R_in) - GAP
+    if show_wind:
+        _beaufort_side_legend(fig, W, H, top_in=H - TOP - 0.15, bottom_in=BOTTOM, R_in=R_in)
+    _legend(fig, 0.25, show_wind, models, R_in=R_in)
     _footer(fig, run_label, models, source)
     fig.savefig(out, dpi=dpi, facecolor="white")
     print(f"✓ saved {out}")
     return fig
 
 def plot_custom_point(data, point, run_label, out="web_images/nwps_point_forecast.png",
-                      show_wind=False, dpi=150, source=None):
+                      show_wind=True, dpi=150, source=None):
     nm = point[0]
     sr = data[nm]
     ymax = _common_ymax([sr])
     models = _models_in([sr])
-    W, TOP, BOTTOM, BARS = 15.0, 0.75, (1.33 if models else 1.0), 2.6
+    R_in = 1.85 if show_wind else 0.35
+    W, TOP, BOTTOM, BARS = 16.2, 0.75, (1.33 if models else 1.0), 2.8
     H = TOP + _strip_height(BARS, show_wind) + BOTTOM
     fig = plt.figure(figsize=(W, H), facecolor="white")
-    _titles(fig, H, "Point Forecast", source)
-    _strip(fig, H - TOP, W, sr, nm, ymax, BARS, show_wind)
-    _legend(fig, 0.25, show_wind, models)
+    _titles(fig, H, "Point Forecast", source, R_in=R_in)
+    _strip(fig, H - TOP, W, sr, nm, ymax, BARS, show_wind, R_in=R_in)
+    if show_wind:
+        _beaufort_side_legend(fig, W, H, top_in=H - TOP - 0.15, bottom_in=BOTTOM, R_in=R_in)
+    _legend(fig, 0.25, show_wind, models, R_in=R_in)
     _footer(fig, run_label, models, source)
     fig.savefig(out, dpi=dpi, facecolor="white")
     print(f"✓ saved {out}")
@@ -1010,7 +1149,7 @@ def summary_table(data, names):
 # ----------------------------------------------------------------------
 def run(lat=None, lon=None, name="", date=None, cycle=None, preset=None,
         refresh=False, cache_dir="nwps_cache",
-        plot_default=True, plot_point=True, show_wind=False,
+        plot_default=True, plot_point=True, show_wind=True,
         out_default="web_images/nwps_virtual_buoys.png",
         out_point="web_images/nwps_point_forecast.png", local_grib=None,
         show_inventory=True, info_step_h=None, compare_gfs=True, compare_ecmwf=True,
@@ -1068,6 +1207,9 @@ def run(lat=None, lon=None, name="", date=None, cycle=None, preset=None,
         compare_gfs = False
     run_label = source["run"]
 
+    if show_wind:
+        enrich_winds_openmeteo(data, points)
+
     if compare_gfs or compare_ecmwf:
         add_model_comparison(data, points, compare_gfs, compare_ecmwf)
     summary_table(data, [p[0] for p in points])
@@ -1094,7 +1236,7 @@ if __name__ == "__main__":
         ap.add_argument("--refresh", action="store_true")
         ap.add_argument("--no-default", action="store_true")
         ap.add_argument("--no-point", action="store_true")
-        ap.add_argument("--wind", action="store_true")
+        ap.add_argument("--no-wind", action="store_true")
         ap.add_argument("--grib")
         ap.add_argument("--every", type=int, default=6, choices=[3, 6, 12])
         ap.add_argument("--no-gfs", action="store_true")
@@ -1104,7 +1246,7 @@ if __name__ == "__main__":
         a = ap.parse_args()
         run(lat=a.lat, lon=a.lon, name=a.name, preset=a.preset, date=a.date,
             cycle=a.cycle, refresh=a.refresh, plot_default=not a.no_default,
-            plot_point=not a.no_point, show_wind=a.wind, local_grib=a.grib,
+            plot_point=not a.no_point, show_wind=not a.no_wind, local_grib=a.grib,
             info_step_h=a.every, compare_gfs=not a.no_gfs, compare_ecmwf=not a.no_ecmwf,
             nwps_product=a.product, gfs_fallback=not a.no_gfs_fallback)
     else:
