@@ -80,7 +80,7 @@ BEAUFORT_CLASSES = [
     (4.0,    1,  "Light air",     "1–3 kt",    "#7dd3fc"),  # Pale Sky Blue
     (7.0,    2,  "Light breeze",  "4–6 kt",    "#2563eb"),  # Royal Blue
     (11.0,   3,  "Gentle breeze", "7–10 kt",   "#0d9488"),  # Deep Teal
-    (17.0,   4,  "Mod. breeze",   "11–16 kt",  "#16a34a"),  # Vivid Emerald Green
+    (17.0,   4,  "Mod. breeze",   "11–16 kt",  "#0B4F32"),  # Vivid Emerald Green
     (22.0,   5,  "Fresh breeze",  "17–21 kt",  "#eab308"),  # Bright Gold / Yellow
     (28.0,   6,  "Strong breeze", "22–27 kt",  "#f97316"),  # Vivid Orange
     (34.0,   7,  "Near gale",     "28–33 kt",  "#dc2626"),  # Crimson Red
