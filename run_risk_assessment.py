@@ -623,8 +623,9 @@ def parse_uwyo_text(text):
 
 def latest_synoptic(now=None):
     now = now or dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
-    t = now - dt.timedelta(hours=1)          # 9 AM AST (13Z) -> 12Z; 9 PM AST (01Z) -> 00Z
-    return t.replace(hour=0 if t.hour < 12 else 12, minute=0, second=0, microsecond=0)
+    # 12:00-23:59 UTC (8:00 AM - 7:59 PM AST) -> 12Z today
+    # 00:00-11:59 UTC (8:00 PM - 7:59 AM AST) -> 00Z today
+    return now.replace(hour=12 if now.hour >= 12 else 0, minute=0, second=0, microsecond=0)
 
 def _ensure_siphon():
     """siphon >= 0.11 reads UWyo's current (wsgi, CSV) service; older versions call the retired cgi page."""
