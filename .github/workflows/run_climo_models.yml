@@ -42,3 +42,5 @@ jobs:
            git pull --rebase origin main
            git push
          fi
+      - name: Notify Apps Script to Archive to Drive
+        run: curl -sL "${{ secrets.GAS_WEBAPP_URL }}?action=archive_climo"
