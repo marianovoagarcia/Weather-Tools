@@ -34,13 +34,11 @@ jobs:
 
       - name: Commit and Push Climo Graphic
         run: |
-         git config --global user.name "github-actions[bot]"
-         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-         git add web_images/climo_vs_models.png
-         if ! git diff --staged --quiet; then
-           git commit -m "Auto-update climo graphic [skip ci]"
-           git pull --rebase origin main
-           git push
-         fi
-      - name: Notify Apps Script to Archive to Drive
-        run: curl -sL "${{ secrets.GAS_WEBAPP_URL }}?action=archive_climo"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add web_images/climo_vs_models.png
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto-update climo graphic [skip ci]"
+            git pull --rebase origin main
+            git push
+          fi
