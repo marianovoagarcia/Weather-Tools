@@ -26,7 +26,7 @@ jobs:
           pip install numpy pandas matplotlib requests siphon metpy
 
       - name: Run Upper-Air Trends Script
-        run: python run_upper_air_trends.py
+        run: python run_upper_trends.py
 
       - name: Commit and Push Upper-Air Trends Graphic
         run: |
