@@ -10,9 +10,9 @@ if USE_LATEST_SOUNDING:
     now_utc = _dt.datetime.now(_dt.timezone.utc)
     # At 9:00 AM AST (13:00 UTC) -> target 12Z today
     # At 9:00 PM AST (01:00 UTC) -> target 00Z today
-    if now_utc.hour >= 13:
+    if now_utc.hour >= 12:
         target_dt = now_utc.replace(hour=12, minute=0, second=0, microsecond=0)
-    elif now_utc.hour >= 1:
+    elif now_utc.hour >= 0:
         target_dt = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         # Between 00:00 and 00:59 UTC (8:00-8:59 PM AST), 00Z hasn't launched yet -> use 12Z yesterday
