@@ -2,31 +2,6 @@ name: Run Upper-Air Trend Dashboard
 
 on:
   workflow_dispatch:
-    inputs:
-      station_icao:
-        description: 'Station ICAO (e.g., TJSJ)'
-        required: false
-        default: 'TJSJ'
-      station_wmo:
-        description: 'Station WMO ID (e.g., 78526)'
-        required: false
-        default: '78526'
-      use_latest:
-        description: 'Use latest synoptic sounding (True/False)'
-        required: false
-        default: 'True'
-      sounding_date:
-        description: 'Sounding Date (YYYY-MM-DD)'
-        required: false
-        default: ''
-      sounding_hour:
-        description: 'Sounding Hour (00Z or 12Z)'
-        required: false
-        default: '12Z'
-      dates_back:
-        description: 'Days back to plot'
-        required: false
-        default: '2'
 
 permissions:
   contents: write
@@ -51,13 +26,6 @@ jobs:
           pip install numpy pandas matplotlib requests siphon metpy
 
       - name: Run Upper-Air Trends Script
-        env:
-          STATION_ICAO: ${{ github.event.inputs.station_icao || 'TJSJ' }}
-          STATION_WMO: ${{ github.event.inputs.station_wmo || '78526' }}
-          USE_LATEST: ${{ github.event.inputs.use_latest || 'True' }}
-          SOUNDING_DATE: ${{ github.event.inputs.sounding_date || '' }}
-          SOUNDING_HOUR: ${{ github.event.inputs.sounding_hour || '12Z' }}
-          DATES_BACK: ${{ github.event.inputs.dates_back || '2' }}
         run: python run_upper_air_trends.py
 
       - name: Commit and Push Upper-Air Trends Graphic
